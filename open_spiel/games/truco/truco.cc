@@ -440,11 +440,12 @@ std::string TrucoState::ActionToString(Player player, Action move) const {
 
 std::string TrucoState::ToString() const {
   const TrucoGame& game = ParentGame();
-  std::string result = absl::StrCat(
-      "Hand:", num_hands_played_, " GameScore: P0=", game_points_[0],
-      " P1=", game_points_[1], " Trick:", current_trick_index_,
-      " Player:", cur_player_, " Mano:", mano_);
-  absl::StrAppend(&result, "\nHands:");
+  std::string result;
+  absl::StrAppend(&result, "\n================ Truco =================\n");
+  absl::StrAppend(&result, "Hand #", num_hands_played_ + 1, "    Score: P0=", game_points_[0], "  P1=", game_points_[1], "\n");
+  absl::StrAppend(&result, "Current Player: P", cur_player_, cur_player_ == mano_ ? " (Mano)" : "", "\n");
+  absl::StrAppend(&result, "----------------------------------------\n");
+  // Show hands
   for (Player p = 0; p < num_players_; ++p) {
     std::vector<std::string> cards;
     for (int card : player_hands_[p]) {
@@ -452,12 +453,56 @@ std::string TrucoState::ToString() const {
         cards.push_back(CardString(game, card));
       }
     }
-    absl::StrAppend(&result, " P", p, "{", absl::StrJoin(cards, ","), "}");
+    absl::StrAppend(&result, "Player ", p, (p == mano_ ? " (Mano)" : ""), " hand: ", absl::StrJoin(cards, ", "), "\n");
   }
-  absl::StrAppend(&result, "\nTrick results: ");
-  for (int i = 0; i < current_trick_index_; ++i) {
-    absl::StrAppend(&result, trick_results_[i], " ");
+  absl::StrAppend(&result, "----------------------------------------\n");
+  // Show trick history
+  absl::StrAppend(&result, "Tricks:\n");
+  for (int t = 0; t < kNumTricks; ++t) {
+    const Trick& trick = tricks_[t];
+    absl::StrAppend(&result, "  Trick ", t + 1, ": ");
+    if (trick.cards.empty()) {
+      absl::StrAppend(&result, "(not started)");
+    } else {
+      for (int i = 0; i < trick.cards.size(); ++i) {
+        absl::StrAppend(&result, "P", trick.players[i], ": ", CardString(game, trick.cards[i]));
+        if (i < trick.cards.size() - 1) absl::StrAppend(&result, ", ");
+      }
+    }
+    if (trick_results_[t] != kInvalidPlayer) {
+      absl::StrAppend(&result, "   Winner: P", trick_results_[t]);
+    }
+    absl::StrAppend(&result, "\n");
   }
+  absl::StrAppend(&result, "----------------------------------------\n");
+  // Show betting history
+  if (!envido_sequence_.empty() || envido_resolved_) {
+    absl::StrAppend(&result, "Envido sequence: ");
+    for (size_t i = 0; i < envido_sequence_.size(); ++i) {
+      absl::StrAppend(&result, EnvidoCallToString(envido_sequence_[i]));
+      if (i < envido_sequence_.size() - 1) absl::StrAppend(&result, " > ");
+    }
+    if (pending_response_ == PendingResponse::kEnvido) {
+      absl::StrAppend(&result, " (awaiting response)");
+    } else if (envido_resolved_) {
+      absl::StrAppend(&result, " (resolved)");
+    }
+    absl::StrAppend(&result, "\n");
+  }
+  absl::StrAppend(&result, "Truco level: ", truco_level_);
+  if (pending_response_ == PendingResponse::kTruco) {
+    absl::StrAppend(&result, " (awaiting response)");
+  }
+  absl::StrAppend(&result, "\n");
+  absl::StrAppend(&result, "----------------------------------------\n");
+  absl::StrAppend(&result, "Next to play: P", cur_player_);
+  if (cur_player_ == mano_) absl::StrAppend(&result, " (Mano)");
+  absl::StrAppend(&result, "\n");
+  if (IsTerminal()) {
+    absl::StrAppend(&result, "*** GAME OVER ***\n");
+    absl::StrAppend(&result, "Final returns: P0=", returns_[0], "  P1=", returns_[1], "\n");
+  }
+  absl::StrAppend(&result,   "========================================\n");
   return result;
 }
 
@@ -821,7 +866,13 @@ void TrucoState::RestoreTurnAfterBet() {
 void TrucoState::ResolveEnvidoAcceptance() {
   SPIEL_CHECK_EQ(pending_response_, PendingResponse::kEnvido);
   Player winner = DetermineEnvidoWinner();
-  int points = SumEnvidoPoints(/*include_last=*/true);
+  int points = 0;
+  if (!envido_sequence_.empty() && envido_sequence_.back() == EnvidoCall::kFaltaEnvido) {
+    // Falta Envido is not cumulative: only its value is awarded
+    points = FaltaEnvidoValue();
+  } else {
+    points = SumEnvidoPoints(/*include_last=*/true);
+  }
   AwardPoints(winner, points);
   pending_response_ = PendingResponse::kNone;
   envido_resolved_ = true;
