@@ -201,6 +201,8 @@ set(GAME_SOURCES
   tiny_hanabi/tiny_hanabi.h
   trade_comm/trade_comm.cc
   trade_comm/trade_comm.h
+  truco/truco.cc
+  truco/truco.h
   twenty_forty_eight/2048.cc
   twenty_forty_eight/2048.h
   twixt/twixt.cc
@@ -679,6 +681,10 @@ add_test(tiny_hanabi_test tiny_hanabi_test)
 add_executable(trade_comm_test trade_comm/trade_comm_test.cc ${OPEN_SPIEL_OBJECTS}
                $<TARGET_OBJECTS:tests>)
 add_test(trade_comm_test trade_comm_test)
+
+add_executable(truco_test truco/truco_test.cc ${OPEN_SPIEL_OBJECTS}
+               $<TARGET_OBJECTS:tests>)
+add_test(truco_test truco_test)
 
 add_executable(twixt_test twixt/twixt_test.cc ${OPEN_SPIEL_OBJECTS}
                $<TARGET_OBJECTS:tests>)
