@@ -531,12 +531,12 @@ std::string TrucoState::ToString() const {
     absl::StrAppend(
         &result, "| Next Action: ",
         (cur_player_ == kChancePlayerId ? "Chance"
-                                       : absl::StrCat("P", cur_player_)),
+                                        : absl::StrCat("P", cur_player_)),
         "\n");
   }
   absl::StrAppend(&result,
                   "+--------------------------------------------------+\n");
-    
+
   return result;
 }
 

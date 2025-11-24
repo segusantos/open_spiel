@@ -297,12 +297,13 @@ class TrucoState : public State {
   Player pending_truco_caller_ = kInvalidPlayer;
   Player truco_next_raiser_ = kInvalidPlayer;
 
-  // Stack to handle nested betting states (e.g. Envido called in response to Truco)
+  // Stack to handle nested betting states (e.g. Envido called in response to
+  // Truco)
   struct TrucoResponseState {
     PendingResponse pending_response;
     Player pending_truco_caller;
     int pending_truco_target;
-    Player cur_player; // The player who needs to respond to the suspended bet
+    Player cur_player;  // The player who needs to respond to the suspended bet
   };
   std::vector<TrucoResponseState> response_stack_;
   bool hand_over_ = false;
