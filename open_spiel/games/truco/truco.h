@@ -1,4 +1,4 @@
-// Copyright 2019 DeepMind Technologies Limited
+// Copyright 2025 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,8 @@ inline constexpr int kNumTricks = 3;
 inline constexpr Player kTiePlayer = -2;
 inline constexpr int kNumEnvidoTypes = 3;
 inline constexpr int kMaxEnvidoSequenceActions = 4;
-inline constexpr int kEnvidoSequenceTensorSize = kMaxEnvidoSequenceActions * kNumEnvidoTypes;
+inline constexpr int kEnvidoSequenceTensorSize =
+    kMaxEnvidoSequenceActions * kNumEnvidoTypes;
 inline constexpr int kTrucoLevelBits = 4;
 inline constexpr int kEnvidoStateBits = 2;
 inline constexpr int kTargetScore = 30;
@@ -199,7 +200,7 @@ class TrucoState : public State {
   int FaltaEnvidoValue(Player loser) const;
   int ComputeEnvidoScore(const std::vector<int>& cards) const;
   std::vector<std::vector<int>> FindCardCombinationsWithEnvidoScore(
-      const std::vector<int>& available_cards, int num_cards, 
+      const std::vector<int>& available_cards, int num_cards,
       int target_score) const;
   std::vector<std::vector<int>> FindCardCombinationsWithEnvidoScoreGivenFixed(
       const std::vector<int>& available_cards, int num_cards,
@@ -238,7 +239,8 @@ class TrucoState : public State {
   Player envido_last_caller_ = kInvalidPlayer;
   bool envido_resolved_ = false;
   bool envido_locked_ = false;
-  std::array<int, 2> revealed_envido_scores_ = {-1, -1};  // Public info after resolution
+  std::array<int, 2> revealed_envido_scores_ = {
+      -1, -1};  // Public info after resolution
 
   // Truco betting data.
   int truco_level_ = 1;
@@ -278,7 +280,7 @@ class TrucoGame : public Game {
     return 2 * kTargetScore * actions_per_hand;
   }
   int MaxChanceNodesInHistory() const override {
-    return num_players_ * kHandSize;
+    return 2 * kTargetScore * num_players_ * kHandSize;
   }
 
   const std::vector<Card>& deck() const { return deck_; }
@@ -291,8 +293,8 @@ class TrucoGame : public Game {
       absl::optional<IIGObservationType> iig_obs_type,
       const GameParameters& params) const override;
 
-  std::shared_ptr<TrucoObserver> default_observer_;
-  std::shared_ptr<TrucoObserver> info_state_observer_;
+  std::shared_ptr<Observer> default_observer_;
+  std::shared_ptr<Observer> info_state_observer_;
 
  private:
   int num_players_;

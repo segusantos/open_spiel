@@ -1,4 +1,4 @@
-// Copyright 2019 DeepMind Technologies Limited
+// Copyright 2025 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -124,7 +124,6 @@ void StartingPlayerAndDeterministicPlayTest() {
   std::unique_ptr<State> state = game->NewInitialState();
 
   SPIEL_CHECK_TRUE(state->IsChanceNode());
-  // Deal: P0 gets 0,1,2 and P1 gets 20,21,22
   const std::vector<Action> dealing = {0, 20, 1, 21, 2, 22};
   for (Action card : dealing) {
     state->ApplyAction(card);
@@ -133,11 +132,10 @@ void StartingPlayerAndDeterministicPlayTest() {
   SPIEL_CHECK_FALSE(state->IsChanceNode());
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
 
-  state->ApplyAction(20);  // Player 1 plays Ancho de Espada.
+  state->ApplyAction(20);
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
-  state->ApplyAction(0);  // Player 0 plays Ancho de Basto.
+  state->ApplyAction(0);
 
-  // Ancho de Espada (14) beats Ancho de Basto (13), so P1 wins and leads
   SPIEL_CHECK_FALSE(state->IsTerminal());
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
 
@@ -145,18 +143,12 @@ void StartingPlayerAndDeterministicPlayTest() {
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
   state->ApplyAction(1);
 
-  // Game is now multi-hand (plays to 30 points), so after one hand it should
-  // NOT be terminal
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  // Game should be waiting for NewHand action
   SPIEL_CHECK_FALSE(state->IsChanceNode());
   SPIEL_CHECK_EQ(state->LegalActions()[0], kNewHandAction);
   state->ApplyAction(kNewHandAction);
-  // Game should be dealing cards for Hand 1
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const std::vector<double> returns = state->Returns();
-  // P1 wins both tricks (Ancho de Espada > Ancho de Basto in trick 1,
-  // and wins trick 2 as well), so game score is P0=-1, P1=1
   SPIEL_CHECK_EQ(returns[0], -1.0);
   SPIEL_CHECK_EQ(returns[1], 1.0);
 
@@ -193,12 +185,10 @@ void EnvidoAcceptTest() {
   state->ApplyAction(10);
   state->ApplyAction(1);
   state->ApplyAction(11);
-  // Game is multi-hand (plays to 30 points), so NOT terminal after one hand
   SPIEL_CHECK_FALSE(state->IsTerminal());
   state->ApplyAction(kNewHandAction);
-  SPIEL_CHECK_TRUE(state->IsChanceNode());  // Dealing for next hand
+  SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  // P0 won envido (2 pts) + hand (1 pt) = 3 pts total
   SPIEL_CHECK_EQ(returns[0], 3);
   SPIEL_CHECK_EQ(returns[1], -3);
 }
@@ -212,16 +202,14 @@ void EnvidoRaiseDeclineTest() {
   const auto after_decline = state->Returns();
   SPIEL_CHECK_EQ(after_decline[0], -3);
   SPIEL_CHECK_EQ(after_decline[1], 3);
-  state->ApplyAction(3);   // P0 plays card 3 (Ancho de Copa)
-  state->ApplyAction(20);  // P1 plays card 20 (Ancho de Espada) - P1 wins trick
-  state->ApplyAction(21);  // P1 leads trick 2 with card 21
-  state->ApplyAction(4);   // P0 plays card 4
-  // Game is multi-hand (plays to 30 points), so NOT terminal after one hand
+  state->ApplyAction(3);
+  state->ApplyAction(20);
+  state->ApplyAction(21);
+  state->ApplyAction(4);
   SPIEL_CHECK_FALSE(state->IsTerminal());
   state->ApplyAction(kNewHandAction);
-  SPIEL_CHECK_TRUE(state->IsChanceNode());  // Dealing for next hand
+  SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  // P1 won envido decline (3 pts) + hand (1 pt) = 4 pts total
   SPIEL_CHECK_EQ(returns[0], -4);
   SPIEL_CHECK_EQ(returns[1], 4);
 }
@@ -231,10 +219,9 @@ void TrucoDeclineTest() {
   auto state = DealFixedHand(game, {0, 10, 1, 11, 2, 12});
   state->ApplyAction(kRaiseTrucoAction);
   state->ApplyAction(kRejectBetAction);
-  // Truco decline ends the hand immediately, but game continues to 30 pts
   SPIEL_CHECK_FALSE(state->IsTerminal());
   state->ApplyAction(kNewHandAction);
-  SPIEL_CHECK_TRUE(state->IsChanceNode());  // Dealing for next hand
+  SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], 1);
   SPIEL_CHECK_EQ(returns[1], -1);
@@ -253,12 +240,10 @@ void TrucoValeCuatroTest() {
   state->ApplyAction(kAcceptBetAction);
   state->ApplyAction(21);
   state->ApplyAction(11);
-  // Game is multi-hand (plays to 30 points), so NOT terminal after one hand
   SPIEL_CHECK_FALSE(state->IsTerminal());
   state->ApplyAction(kNewHandAction);
-  SPIEL_CHECK_TRUE(state->IsChanceNode());  // Dealing for next hand
+  SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  // P0 won hand with Vale Cuatro accepted = 4 pts
   SPIEL_CHECK_EQ(returns[0], 4);
   SPIEL_CHECK_EQ(returns[1], -4);
 }
@@ -273,12 +258,10 @@ void TrucoImmediateRetrucoTest() {
   state->ApplyAction(10);
   state->ApplyAction(1);
   state->ApplyAction(11);
-  // Game is multi-hand (plays to 30 points), so NOT terminal after one hand
   SPIEL_CHECK_FALSE(state->IsTerminal());
   state->ApplyAction(kNewHandAction);
-  SPIEL_CHECK_TRUE(state->IsChanceNode());  // Dealing for next hand
+  SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  // P0 won hand with Retruco accepted = 3 pts
   SPIEL_CHECK_EQ(returns[0], 3);
   SPIEL_CHECK_EQ(returns[1], -3);
 }
@@ -291,7 +274,7 @@ void TrucoSecondTrickTurnOrderTest() {
   for (Action action : actions) {
     state->ApplyActionWithLegalityCheck(action);
   }
-  
+
   auto legal_actions = state->LegalActions();
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
   SPIEL_CHECK_TRUE(std::find(legal_actions.begin(), legal_actions.end(),
@@ -324,10 +307,6 @@ void FaltaEnvidoAcceptTest() {
   auto state = DealFixedHand(game, {34, 0, 35, 1, 36, 2});
   state->ApplyAction(kFaltaEnvidoAction);
   state->ApplyAction(kAcceptBetAction);
-  // According to the Wikipedia rule implemented: both teams are in "malas"
-  // (scores 0-14) so Falta Envido at the start awards enough points to win
-  // the partido (reach kTargetScore). The winner should immediately get
-  // the points required to reach kTargetScore and the game becomes terminal.
   const auto returns_after_envido = state->Returns();
   SPIEL_CHECK_EQ(returns_after_envido[0], kTargetScore);
   SPIEL_CHECK_EQ(returns_after_envido[1], -kTargetScore);
@@ -336,92 +315,63 @@ void FaltaEnvidoAcceptTest() {
 
 void EnvidoTieGoesToManoTest() {
   auto game = LoadGame("truco");
-  // Both players have envido 7 (no matching suits, single 7 highest card)
-  // P0 (mano): 7 de Oro (36), 5 de Basto (4), 4 de Copa (13)
-  // P1: 7 de Espada (26), 6 de Basto (5), 3 de Copa (12)
   auto state = DealFixedHand(game, {36, 26, 4, 5, 13, 12});
   state->ApplyAction(kEnvidoAction);
   state->ApplyAction(kAcceptBetAction);
-  // P0 (mano) should win on tie (both have 7), gets 2 points for Envido
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], 2);
   SPIEL_CHECK_EQ(returns[1], -2);
-  // Hand should still be playable (not terminal after envido resolution)
   SPIEL_CHECK_FALSE(state->IsTerminal());
 }
 
 void AllTricksTiedManoWinsTest() {
   auto game = LoadGame("truco");
-  // Deal cards where all tricks tie
-  // P0 (mano): 4,5,6 de Oro (33,34,35)
-  // P1: 4,5,6 de Basto (3,4,5)  (same rank = tie)
   auto state = DealFixedHand(game, {33, 3, 34, 4, 35, 5});
-  state->ApplyAction(33);  // P0: 4 de Oro
-  state->ApplyAction(3);   // P1: 4 de Basto (tie - mano leads)
-  // After tied first trick, mano (P0) should lead
+  state->ApplyAction(33);
+  state->ApplyAction(3);
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
-  state->ApplyAction(34);  // P0: 5 de Oro
-  state->ApplyAction(4);   // P1: 5 de Basto (tie - mano leads again)
-  // After 2 tied tricks, game may already be decided
+  state->ApplyAction(34);
+  state->ApplyAction(4);
   if (!state->IsChanceNode() && state->LegalActions()[0] != kNewHandAction) {
-    state->ApplyAction(35);  // P0: 6 de Oro
-    state->ApplyAction(5);   // P1: 6 de Basto (tie)
+    state->ApplyAction(35);
+    state->ApplyAction(5);
   }
-  // Game is multi-hand (plays to 30 points), so NOT terminal after one hand
   SPIEL_CHECK_FALSE(state->IsTerminal());
   state->ApplyAction(kNewHandAction);
-  SPIEL_CHECK_TRUE(state->IsChanceNode());  // Dealing for next hand
+  SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  // Mano (P0) wins when all tricks are tied, gets 1 point
   SPIEL_CHECK_EQ(returns[0], 1);
   SPIEL_CHECK_EQ(returns[1], -1);
 }
 
 void EnvidoFirstTest() {
   auto game = LoadGame("truco");
-  // P0: 1 Espada (20), 7 Oro (36), 3 Basto (2) -> Envido 20+0=20 (bad)
-  // P1: 7 Espada (26), 6 Espada (25), 5 Espada (24) -> Envido 20+7+6=33 (good)
   auto state = DealFixedHand(game, {20, 26, 36, 25, 2, 24});
 
-  // P0 calls Truco
   state->ApplyAction(kRaiseTrucoAction);
-
-  // P1 calls Envido (Envido First)
   state->ApplyAction(kEnvidoAction);
-
-  // P0 accepts Envido
   state->ApplyAction(kAcceptBetAction);
 
-  // Envido should be resolved (P1 wins 2 points)
   auto rewards = state->Rewards();
   SPIEL_CHECK_EQ(rewards[0], -2);
   SPIEL_CHECK_EQ(rewards[1], 2);
 
-  // Now P1 must answer Truco
-  // P1 accepts Truco
   state->ApplyAction(kAcceptBetAction);
-
-  // Game continues
   SPIEL_CHECK_FALSE(state->IsTerminal());
 }
 
 void TieFirstTrickWinnerSecondTakesHandTest() {
   auto game = LoadGame("truco");
-  // P0: 4 Oro (33), 1 Espada (20), ...
-  // P1: 4 Basto (3), 4 Copa (13), ...
-  // Deal: P0, P1, P0, P1, P0, P1
   auto state = DealFixedHand(game, {33, 3, 20, 13, 35, 14});
 
-  state->ApplyAction(33);  // P0 plays 4 Oro
-  state->ApplyAction(3);   // P1 plays 4 Basto (Tie)
+  state->ApplyAction(33);
+  state->ApplyAction(3);
 
-  // Mano (P0) should lead second trick after tie
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
 
-  state->ApplyAction(20);  // P0 plays 1 Espada
-  state->ApplyAction(13);  // P1 plays 4 Copa (P0 wins trick)
+  state->ApplyAction(20);
+  state->ApplyAction(13);
 
-  // P0 won 2nd trick after 1st was tied -> P0 wins hand
   SPIEL_CHECK_FALSE(state->IsTerminal());
   state->ApplyAction(kNewHandAction);
   const auto returns = state->Returns();
@@ -431,18 +381,14 @@ void TieFirstTrickWinnerSecondTakesHandTest() {
 
 void FirstWonSecondTiedWinnerFirstTakesHandTest() {
   auto game = LoadGame("truco");
-  // P0: 1 Espada (20), 4 Oro (33), ...
-  // P1: 4 Copa (13), 4 Basto (3), ...
-  // Deal: P0, P1, P0, P1, P0, P1
   auto state = DealFixedHand(game, {20, 13, 33, 3, 35, 14});
 
-  state->ApplyAction(20);  // P0 plays 1 Espada
-  state->ApplyAction(13);  // P1 plays 4 Copa (P0 wins)
+  state->ApplyAction(20);
+  state->ApplyAction(13);
 
-  state->ApplyAction(33);  // P0 leads 4 Oro
-  state->ApplyAction(3);   // P1 plays 4 Basto (Tie)
+  state->ApplyAction(33);
+  state->ApplyAction(3);
 
-  // P0 won 1st, 2nd tied -> P0 wins hand immediately
   SPIEL_CHECK_FALSE(state->IsTerminal());
   state->ApplyAction(kNewHandAction);
   const auto returns = state->Returns();
@@ -454,11 +400,10 @@ void RetrucoDeclinePointsTest() {
   auto game = LoadGame("truco");
   auto state = DealFixedHand(game, {0, 10, 1, 11, 2, 12});
 
-  state->ApplyAction(kRaiseTrucoAction);  // Truco (P0)
-  state->ApplyAction(kRaiseTrucoAction);  // Retruco (P1)
-  state->ApplyAction(kRejectBetAction);   // Reject (P0)
+  state->ApplyAction(kRaiseTrucoAction);
+  state->ApplyAction(kRaiseTrucoAction);
+  state->ApplyAction(kRejectBetAction);
 
-  // Rejecting Retruco gives 2 points to the caller (P1)
   SPIEL_CHECK_FALSE(state->IsTerminal());
   state->ApplyAction(kNewHandAction);
   const auto returns = state->Returns();
@@ -470,14 +415,11 @@ void EnvidoIllegalInSecondTrickTest() {
   auto game = LoadGame("truco");
   auto state = DealFixedHand(game, {0, 10, 1, 11, 2, 12});
 
-  // Play first trick
   state->ApplyAction(0);
   state->ApplyAction(10);
 
-  // Now in second trick
   auto legal_actions = state->LegalActions();
 
-  // Envido actions should NOT be legal anymore
   SPIEL_CHECK_TRUE(std::find(legal_actions.begin(), legal_actions.end(),
                              kEnvidoAction) == legal_actions.end());
   SPIEL_CHECK_TRUE(std::find(legal_actions.begin(), legal_actions.end(),
@@ -485,7 +427,6 @@ void EnvidoIllegalInSecondTrickTest() {
   SPIEL_CHECK_TRUE(std::find(legal_actions.begin(), legal_actions.end(),
                              kFaltaEnvidoAction) == legal_actions.end());
 
-  // Truco should still be legal
   SPIEL_CHECK_TRUE(std::find(legal_actions.begin(), legal_actions.end(),
                              kRaiseTrucoAction) != legal_actions.end());
 }
@@ -493,31 +434,20 @@ void EnvidoIllegalInSecondTrickTest() {
 void TensorShapeTest() {
   std::shared_ptr<const Game> game = LoadGame("truco");
   std::unique_ptr<State> state = game->NewInitialState();
-  
-  // Check Observation Tensor Shape
+
   std::vector<int> obs_shape = game->ObservationTensorShape();
   int expected_size = 0;
-  // Player: 2
   expected_size += 2;
-  // Hand: 40
   expected_size += 40;
-  // Tricks: 3 * 2 * 40 = 240
   expected_size += 240;
-  // Trick Info: 3 * (2+1) + 3 * 2 = 9 + 6 = 15
   expected_size += 15;
-  // Game Score: 2
   expected_size += 2;
-  // Truco Level: 4
   expected_size += 4;
-  // Envido Sequence: 4 * 3 = 12
   expected_size += 12;
-  // Envido State: 2
   expected_size += 2;
-  // Envido Score: 2
   expected_size += 2;
-  // Mano: 2
   expected_size += 2;
-  
+
   int calculated_size = obs_shape[0];
   SPIEL_CHECK_EQ(calculated_size, expected_size);
 }
@@ -525,67 +455,44 @@ void TensorShapeTest() {
 void TrickAnalysisTensorTest() {
   std::shared_ptr<const Game> game = LoadGame("truco");
   std::unique_ptr<State> state = game->NewInitialState();
-  
-  // Deal cards
+
   while (state->IsChanceNode()) {
     state->ApplyAction(state->LegalActions()[0]);
   }
-  
-  // P0 plays card 0
+
   state->ApplyAction(state->LegalActions()[0]);
-  // P1 plays card 0 (assuming different card)
   state->ApplyAction(state->LegalActions()[0]);
-  
-  // Trick 1 finished.
-  
+
   std::vector<float> tensor(game->ObservationTensorSize());
   state->ObservationTensor(0, absl::MakeSpan(tensor));
-  
-  // Verify that some bits in the trick analysis section are set
-  // We need to calculate the offset
-  int offset = 2 + 40 + 240; // Player + Hand + Tricks
-  
-  // Trick Winners (3 * 3 = 9 bits)
-  // Trick Leaders (3 * 2 = 6 bits)
-  
+
+  int offset = 2 + 40 + 240;
+
   bool found_winner = false;
   for (int i = 0; i < 9; ++i) {
     if (tensor[offset + i] == 1.0) found_winner = true;
   }
-  
+
   bool found_leader = false;
   for (int i = 0; i < 6; ++i) {
     if (tensor[offset + 9 + i] == 1.0) found_leader = true;
   }
-  
+
   SPIEL_CHECK_TRUE(found_winner);
   SPIEL_CHECK_TRUE(found_leader);
 }
 
 void TieFirstTieSecondThirdDecidesTest() {
   auto game = LoadGame("truco");
-  // P0 (Mano): 4 Oro (33), 5 Oro (34), 1 Espada (20)
-  // P1: 4 Basto (3), 5 Basto (4), 1 Basto (13)
-  // 1st trick: 4 Oro vs 4 Basto (Tie)
-  // 2nd trick: 5 Oro vs 5 Basto (Tie)
-  // 3rd trick: 1 Espada (14) vs 1 Basto (13) -> P0 wins
-  // Wait, if P0 wins, Mano wins anyway.
-  // Let's make P1 win the 3rd trick.
-  // P0: 4 Oro (33), 5 Oro (34), 1 Basto (13)
-  // P1: 4 Basto (3), 5 Basto (4), 1 Espada (20)
   auto state = DealFixedHand(game, {33, 3, 34, 4, 13, 20});
 
-  state->ApplyAction(33);  // P0: 4 Oro
-  state->ApplyAction(3);   // P1: 4 Basto (Tie)
+  state->ApplyAction(33);
+  state->ApplyAction(3);
 
-  state->ApplyAction(34);  // P0: 5 Oro
-  state->ApplyAction(4);   // P1: 5 Basto (Tie)
-
-  // If bug exists, hand ends here and Mano (P0) wins.
-  // If correct, game continues to 3rd trick.
+  state->ApplyAction(34);
+  state->ApplyAction(4);
 
   if (state->IsChanceNode() || state->LegalActions()[0] == kNewHandAction) {
-    // Hand ended early
     const auto returns = state->Returns();
     if (returns[0] > 0) {
       SPIEL_CHECK_TRUE(
@@ -593,9 +500,8 @@ void TieFirstTieSecondThirdDecidesTest() {
           "Hand ended early after 2 ties, Mano won. Should play 3rd trick.");
     }
   } else {
-    // Play 3rd trick
-    state->ApplyAction(13);  // P0: 1 Basto
-    state->ApplyAction(20);  // P1: 1 Espada (Wins trick and hand)
+    state->ApplyAction(13);
+    state->ApplyAction(20);
 
     state->ApplyAction(kNewHandAction);
     const auto returns = state->Returns();
@@ -606,23 +512,15 @@ void TieFirstTieSecondThirdDecidesTest() {
 
 void ThirdTrickLeaderTest() {
   auto game = LoadGame("truco");
-  // Deal: P0 gets 20 (1 Espada), 3 (4 Basto), 1 (4 Copa). 
-  //       P1 gets 13 (1 Basto), 10 (1 Copa), 26 (7 Espada).
   auto state = DealFixedHand(game, {20, 13, 3, 10, 1, 26});
-  
-  // Trick 1
-  state->ApplyAction(20); // P0: 1 Espada
-  state->ApplyAction(13); // P1: 1 Basto
-  // P0 wins (14 > 13).
-  
-  // Trick 2
-  SPIEL_CHECK_EQ(state->CurrentPlayer(), 0); // P0 leads
-  state->ApplyAction(3);  // P0: 4 Basto
-  state->ApplyAction(26); // P1: 7 Espada
-  // P1 wins (12 > 1).
-  
-  // Trick 3
-  // P1 should lead because they won the previous trick.
+
+  state->ApplyAction(20);
+  state->ApplyAction(13);
+
+  SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
+  state->ApplyAction(3);
+  state->ApplyAction(26);
+
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
 }
 

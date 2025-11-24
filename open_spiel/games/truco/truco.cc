@@ -1,4 +1,4 @@
-// Copyright 2019 DeepMind Technologies Limited
+// Copyright 2025 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -161,41 +161,50 @@ class TrucoObserver : public Observer {
     }
   }
 
-  static void WriteTrickAnalysis(const TrucoState& state, Allocator* allocator) {
+  static void WriteTrickAnalysis(const TrucoState& state,
+                                 Allocator* allocator) {
     // Winners: P0, P1, Tie (3 bits per trick)
     // Leaders: P0, P1 (2 bits per trick)
-    auto out_winners = allocator->Get("trick_winners", {kNumTricks, state.num_players_ + 1});
-    auto out_leaders = allocator->Get("trick_leaders", {kNumTricks, state.num_players_});
+    auto out_winners =
+        allocator->Get("trick_winners", {kNumTricks, state.num_players_ + 1});
+    auto out_leaders =
+        allocator->Get("trick_leaders", {kNumTricks, state.num_players_});
 
     for (int t = 0; t < kNumTricks; ++t) {
       // Winner
       Player winner = state.trick_results()[t];
       if (winner != kInvalidPlayer) {
         if (winner == kTiePlayer) {
-          out_winners.at(t, state.num_players_) = 1; // Tie
+          out_winners.at(t, state.num_players_) = 1;  // Tie
         } else {
           out_winners.at(t, winner) = 1;
         }
       }
 
       // Leader
-      if (t < state.trick_history().size() && !state.trick_history()[t].players.empty()) {
-         Player leader = state.trick_history()[t].players[0];
-         out_leaders.at(t, leader) = 1;
+      if (t < state.trick_history().size() &&
+          !state.trick_history()[t].players.empty()) {
+        Player leader = state.trick_history()[t].players[0];
+        out_leaders.at(t, leader) = 1;
       }
     }
   }
 
-  static void WriteCurrentTrucoLevel(const TrucoState& state, Allocator* allocator) {
+  static void WriteCurrentTrucoLevel(const TrucoState& state,
+                                     Allocator* allocator) {
     auto out = allocator->Get("truco_level", {kTrucoLevelBits});
     if (state.truco_level_ >= 1 && state.truco_level_ <= 4) {
       out.at(state.truco_level_ - 1) = 1;
     }
   }
 
-  static void WriteEnvidoSequence(const TrucoState& state, Allocator* allocator) {
-    auto out = allocator->Get("envido_sequence", {kMaxEnvidoSequenceActions, kNumEnvidoTypes});
-    for (size_t i = 0; i < state.envido_sequence_.size() && i < kMaxEnvidoSequenceActions; ++i) {
+  static void WriteEnvidoSequence(const TrucoState& state,
+                                  Allocator* allocator) {
+    auto out = allocator->Get("envido_sequence",
+                              {kMaxEnvidoSequenceActions, kNumEnvidoTypes});
+    for (size_t i = 0;
+         i < state.envido_sequence_.size() && i < kMaxEnvidoSequenceActions;
+         ++i) {
       out.at(i, static_cast<int>(state.envido_sequence_[i])) = 1;
     }
   }
@@ -216,16 +225,17 @@ class TrucoObserver : public Observer {
   }
 
   static void WriteEnvidoScores(const TrucoState& state, int player,
-                                 Allocator* allocator) {
+                                Allocator* allocator) {
     auto out = allocator->Get("envido_scores", {state.num_players_});
-    
+
     // Always write own Envido score (helps agent learn Envido calculation)
     out.at(player) = static_cast<float>(state.PlayerEnvidoScore(player)) / 33.0;
-    
+
     // Write opponent's score only if it was revealed (Envido accepted)
     if (state.revealed_envido_scores_[1 - player] >= 0) {
       Player opponent = 1 - player;
-      out.at(opponent) = static_cast<float>(state.revealed_envido_scores_[opponent]) / 33.0;
+      out.at(opponent) =
+          static_cast<float>(state.revealed_envido_scores_[opponent]) / 33.0;
     }
   }
 
@@ -396,7 +406,7 @@ const TrucoGame& TrucoState::ParentGame() const {
 
 TrucoState::TrucoState(std::shared_ptr<const Game> game)
     : State(game),
-      cur_player_(kChancePlayerId),  // Start in chance phase for dealing
+      cur_player_(kChancePlayerId),
       starting_player_(ParentGame().starting_player()),
       mano_(starting_player_),
       winner_(kInvalidPlayer),
@@ -521,9 +531,7 @@ std::string TrucoState::ToString() const {
 
 bool TrucoState::IsTerminal() const { return terminal_; }
 
-std::vector<double> TrucoState::Returns() const {
-  return returns_;
-}
+std::vector<double> TrucoState::Returns() const { return returns_; }
 
 std::vector<double> TrucoState::Rewards() const { return rewards_; }
 
@@ -686,9 +694,7 @@ bool TrucoState::CanCallEnvido(Player player) const {
   return true;
 }
 
-bool TrucoState::EnvidoWindowOpen() const {
-  return current_trick_index_ == 0;
-}
+bool TrucoState::EnvidoWindowOpen() const { return current_trick_index_ == 0; }
 
 bool TrucoState::CanRaiseTruco(Player player, Action action) const {
   if (player != cur_player_) return false;
@@ -727,7 +733,7 @@ std::unique_ptr<State> TrucoState::ResampleFromInfostate(
   // Collect all available cards (unowned + opponent's current unplayed cards)
   for (int card = 0; card < kNumCards; ++card) {
     if (truco_clone->card_owner_[card] == kInvalidPlayer ||
-        (truco_clone->card_owner_[card] == opponent && 
+        (truco_clone->card_owner_[card] == opponent &&
          !truco_clone->card_played_[card])) {
       available_cards.push_back(card);
     }
@@ -742,24 +748,26 @@ std::unique_ptr<State> TrucoState::ResampleFromInfostate(
   // The score is calculated from their FULL 3-card hand (played + unplayed)
   if (envido_resolved_ && revealed_envido_scores_[opponent] >= 0) {
     int required_score = revealed_envido_scores_[opponent];
-    
+
     // Find card combinations where: played_cards + new_cards = required_score
     std::vector<std::vector<int>> valid_combinations =
         FindCardCombinationsWithEnvidoScoreGivenFixed(
-            available_cards, num_cards_needed, opponent_played_cards, required_score);
-    
+            available_cards, num_cards_needed, opponent_played_cards,
+            required_score);
+
     if (valid_combinations.empty()) {
       SpielFatalError(absl::StrCat(
           "No valid card combination exists for Envido score: ", required_score,
           " with ", opponent_played_cards.size(), " fixed cards and ",
-          num_cards_needed, " cards from ", available_cards.size(), 
+          num_cards_needed, " cards from ", available_cards.size(),
           " available cards"));
     }
-    
+
     // Sample uniformly from valid combinations
-    std::uniform_int_distribution<size_t> dist(0, valid_combinations.size() - 1);
+    std::uniform_int_distribution<size_t> dist(0,
+                                               valid_combinations.size() - 1);
     const std::vector<int>& chosen_combination = valid_combinations[dist(gen)];
-    
+
     // Assign chosen cards to opponent's hand
     for (size_t i = 0; i < opponent_slots.size(); ++i) {
       int slot = opponent_slots[i];
@@ -767,15 +775,16 @@ std::unique_ptr<State> TrucoState::ResampleFromInfostate(
       truco_clone->player_hands_[opponent][slot] = new_card;
       truco_clone->card_owner_[new_card] = opponent;
     }
-    
+
     // Mark remaining cards as unowned
-    std::set<int> assigned(chosen_combination.begin(), chosen_combination.end());
+    std::set<int> assigned(chosen_combination.begin(),
+                           chosen_combination.end());
     for (int card : available_cards) {
       if (assigned.find(card) == assigned.end()) {
         truco_clone->card_owner_[card] = kInvalidPlayer;
       }
     }
-    
+
     return clone;
   }
 
@@ -874,7 +883,7 @@ void TrucoState::ApplyEnvidoCall(Action action) {
   }
 
   Player caller = cur_player_;
-  
+
   if (pending_response_ == PendingResponse::kTruco) {
     response_stack_.push_back({pending_response_, pending_truco_caller_,
                                pending_truco_target_, cur_player_});
@@ -956,10 +965,9 @@ void TrucoState::RestoreTurnAfterBet() {
 
 void TrucoState::ResolveEnvidoAcceptance() {
   SPIEL_CHECK_EQ(pending_response_, PendingResponse::kEnvido);
-  // Store revealed Envido scores as public information
   revealed_envido_scores_[0] = PlayerEnvidoScore(0);
   revealed_envido_scores_[1] = PlayerEnvidoScore(1);
-  
+
   Player winner = DetermineEnvidoWinner();
   int points = 0;
   if (!envido_sequence_.empty() &&
@@ -1143,72 +1151,67 @@ int TrucoState::ComputeEnvidoScore(const std::vector<int>& cards) const {
 }
 
 std::vector<std::vector<int>> TrucoState::FindCardCombinationsWithEnvidoScore(
-    const std::vector<int>& available_cards, int num_cards, 
+    const std::vector<int>& available_cards, int num_cards,
     int target_score) const {
   std::vector<std::vector<int>> result;
   std::vector<int> current_combination;
-  
+
   // Helper function to generate combinations recursively
-  std::function<void(size_t, int)> generate_combinations = 
-      [&](size_t start_idx, int remaining) {
+  std::function<void(size_t, int)> generate_combinations = [&](size_t start_idx,
+                                                               int remaining) {
     if (remaining == 0) {
-      // Check if this combination produces the target Envido score
       if (ComputeEnvidoScore(current_combination) == target_score) {
         result.push_back(current_combination);
       }
       return;
     }
-    
-    // Pruning: if we can't possibly reach num_cards, stop
+
     if (start_idx + remaining > available_cards.size()) {
       return;
     }
-    
+
     for (size_t i = start_idx; i < available_cards.size(); ++i) {
       current_combination.push_back(available_cards[i]);
       generate_combinations(i + 1, remaining - 1);
       current_combination.pop_back();
     }
   };
-  
+
   generate_combinations(0, num_cards);
   return result;
 }
 
-std::vector<std::vector<int>> TrucoState::FindCardCombinationsWithEnvidoScoreGivenFixed(
+std::vector<std::vector<int>>
+TrucoState::FindCardCombinationsWithEnvidoScoreGivenFixed(
     const std::vector<int>& available_cards, int num_cards,
     const std::vector<int>& fixed_cards, int target_score) const {
   std::vector<std::vector<int>> result;
   std::vector<int> current_combination;
-  
-  // Helper function to generate combinations recursively
-  std::function<void(size_t, int)> generate_combinations = 
-      [&](size_t start_idx, int remaining) {
+
+  std::function<void(size_t, int)> generate_combinations = [&](size_t start_idx,
+                                                               int remaining) {
     if (remaining == 0) {
-      // Combine fixed cards with the current combination to form full hand
       std::vector<int> full_hand = fixed_cards;
-      full_hand.insert(full_hand.end(), current_combination.begin(), 
-                      current_combination.end());
-      
-      // Check if this full hand produces the target Envido score
+      full_hand.insert(full_hand.end(), current_combination.begin(),
+                       current_combination.end());
+
       if (ComputeEnvidoScore(full_hand) == target_score) {
         result.push_back(current_combination);
       }
       return;
     }
-    
-    // Pruning: if we can't possibly reach num_cards, stop
+
     if (start_idx + remaining > available_cards.size()) {
       return;
     }
-    
+
     for (size_t i = start_idx; i < available_cards.size(); ++i) {
       current_combination.push_back(available_cards[i]);
       generate_combinations(i + 1, remaining - 1);
       current_combination.pop_back();
     }
   };
-  
+
   generate_combinations(0, num_cards);
   return result;
 }
@@ -1251,11 +1254,9 @@ void TrucoState::FinishTrick(Player trick_winner) {
     ++trick_wins_[trick_winner];
   }
 
-  int cards_dealt_before = cards_dealt_;
   MaybeResolveHand(trick_winner);
-  bool hand_ended = hand_over_;
 
-  if (!hand_ended && !terminal_) {
+  if (!hand_over_ && !terminal_) {
     std::fill(rewards_.begin(), rewards_.end(), 0.0);
 
     ++current_trick_index_;
@@ -1269,8 +1270,6 @@ void TrucoState::FinishTrick(Player trick_winner) {
     }
 
     if (!terminal_) {
-      // The winner of the current trick leads the next one.
-      // If the trick was tied, the leader remains the same (Mano leads if 1st tied).
       if (trick_winner != kTiePlayer) {
         trick_leader_ = trick_winner;
       }
@@ -1293,8 +1292,6 @@ void TrucoState::MaybeResolveHand(Player latest_trick_winner) {
       winner_ = second;
     } else if (first != kTiePlayer && second == kTiePlayer) {
       winner_ = first;
-    } else if (first == kTiePlayer && second == kTiePlayer) {
-      // Both tricks tied, wait for 3rd trick
     }
   } else if (current_trick_index_ == 2) {
     Player third = trick_results_[2];
@@ -1327,17 +1324,14 @@ void TrucoState::MaybeResolveHand(Player latest_trick_winner) {
 
 void TrucoState::StartNewHand() {
   hand_over_ = false;
-  // Reset hand-specific state while preserving game_points_
   winner_ = kInvalidPlayer;
   cards_dealt_ = 0;
   cards_played_in_trick_ = 0;
   current_trick_index_ = 0;
 
-  // Alternate mano (starting player rotates each hand)
   mano_ = 1 - mano_;
   trick_leader_ = mano_;
 
-  // Reset hands and card tracking
   for (auto& hand : player_hands_) {
     hand.clear();
   }
@@ -1347,13 +1341,11 @@ void TrucoState::StartNewHand() {
   std::fill(trick_wins_.begin(), trick_wins_.end(), 0);
   std::fill(trick_results_.begin(), trick_results_.end(), kInvalidPlayer);
 
-  // Reset tricks
   for (auto& trick : tricks_) {
     trick.cards.clear();
     trick.players.clear();
   }
 
-  // Reset betting state
   pending_response_ = PendingResponse::kNone;
   player_turn_before_bet_ = kInvalidPlayer;
   envido_sequence_.clear();
@@ -1369,7 +1361,6 @@ void TrucoState::StartNewHand() {
   truco_log_.clear();
   response_stack_.clear();
 
-  // Start dealing phase
   cur_player_ = kChancePlayerId;
 }
 
@@ -1427,33 +1418,36 @@ std::vector<int> TrucoGame::InformationStateTensorShape() const {
   int single_hand_bits = kNumCards;
   int all_hand_bits = num_players_ * kNumCards;
   int trick_bits = kNumTricks * num_players_ * kNumCards;
-  int trick_info_bits = kNumTricks * (num_players_ + 1) + kNumTricks * num_players_;
+  int trick_info_bits =
+      kNumTricks * (num_players_ + 1) + kNumTricks * num_players_;
   int game_score_bits = num_players_;
   int current_truco_level_bits = kTrucoLevelBits;
   int envido_sequence_bits = kEnvidoSequenceTensorSize;
   int envido_state_bits = kEnvidoStateBits;
   int envido_score_bits = num_players_;
   int mano_bits = num_players_;
-  
-  return {player_bits + single_hand_bits + all_hand_bits + trick_bits + trick_info_bits +
-          game_score_bits + current_truco_level_bits + 
-          envido_sequence_bits + envido_state_bits + envido_score_bits + mano_bits};
+
+  return {player_bits + single_hand_bits + all_hand_bits + trick_bits +
+          trick_info_bits + game_score_bits + current_truco_level_bits +
+          envido_sequence_bits + envido_state_bits + envido_score_bits +
+          mano_bits};
 }
 
 std::vector<int> TrucoGame::ObservationTensorShape() const {
   int player_bits = num_players_;
   int hand_bits = kNumCards;
   int trick_bits = kNumTricks * num_players_ * kNumCards;
-  int trick_info_bits = kNumTricks * (num_players_ + 1) + kNumTricks * num_players_;
+  int trick_info_bits =
+      kNumTricks * (num_players_ + 1) + kNumTricks * num_players_;
   int game_score_bits = num_players_;
   int current_truco_level_bits = kTrucoLevelBits;
   int envido_sequence_bits = kEnvidoSequenceTensorSize;
   int envido_state_bits = kEnvidoStateBits;
   int envido_score_bits = num_players_;
   int mano_bits = num_players_;
-  
-  return {player_bits + hand_bits + trick_bits + trick_info_bits + game_score_bits +
-          current_truco_level_bits + envido_sequence_bits + 
+
+  return {player_bits + hand_bits + trick_bits + trick_info_bits +
+          game_score_bits + current_truco_level_bits + envido_sequence_bits +
           envido_state_bits + envido_score_bits + mano_bits};
 }
 
