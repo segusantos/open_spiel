@@ -525,8 +525,8 @@ std::string TrucoState::ToString() const {
   // Status
   if (IsTerminal()) {
     absl::StrAppend(&result, "| GAME OVER\n");
-    absl::StrAppend(&result, "| Final Returns: P0=", returns_[0],
-                    "  P1=", returns_[1], "\n");
+    absl::StrAppend(&result, "| Final Score: P0=", game_points_[0],
+                    "  P1=", game_points_[1], "\n");
   } else {
     absl::StrAppend(
         &result, "| Next Action: ",
