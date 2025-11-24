@@ -17,7 +17,7 @@
 // rules for 2-player Truco.
 //
 // Game Overview:
-// - Deck: 40 Spanish cards (4 suits × 10 ranks, excluding 8s and 9s)
+// - Deck: 40 Spanish cards (4 suits × 10 ranks, excluding 8s, 9s and jokers)
 // - Players: 2
 // - Deal: Each player receives 3 cards
 // - Structure: Best of 3 tricks per hand
@@ -112,12 +112,11 @@ inline constexpr int kMalasBuenasThreshold = 15;  // Malas: 0-14, Buenas: 15-29
 inline constexpr int kEnvidoAction = kNumCards;
 inline constexpr int kRealEnvidoAction = kNumCards + 1;
 inline constexpr int kFaltaEnvidoAction = kNumCards + 2;
-inline constexpr int kTrucoAction = kNumCards + 3;
-inline constexpr int kRetrucoAction = kNumCards + 4;
-inline constexpr int kValeCuatroAction = kNumCards + 5;
-inline constexpr int kAcceptBetAction = kNumCards + 6;
-inline constexpr int kRejectBetAction = kNumCards + 7;
-inline constexpr int kNumSpecialActions = 8;
+inline constexpr int kRaiseTrucoAction = kNumCards + 3;
+inline constexpr int kAcceptBetAction = kNumCards + 4;
+inline constexpr int kRejectBetAction = kNumCards + 5;
+inline constexpr int kNewHandAction = kNumCards + 6;
+inline constexpr int kNumSpecialActions = 7;
 inline constexpr int kNumDistinctTrucoActions = kNumCards + kNumSpecialActions;
 inline constexpr int kMaxEnvidoSequenceActions = 4;
 inline constexpr int kMaxTrucoSequenceActions = 6;
@@ -132,8 +131,7 @@ inline bool IsEnvidoCallAction(Action action) {
          action == kFaltaEnvidoAction;
 }
 inline bool IsTrucoCallAction(Action action) {
-  return action == kTrucoAction || action == kRetrucoAction ||
-         action == kValeCuatroAction;
+  return action == kRaiseTrucoAction;
 }
 inline bool IsResponseAction(Action action) {
   return action == kAcceptBetAction || action == kRejectBetAction;
@@ -153,12 +151,12 @@ enum class Suit { Basto, Copa, Espada, Oro };
 
 enum class Rank {
   Ancho = 1,
-  Two = 2,
-  Three = 3,
-  Four = 4,
-  Five = 5,
-  Six = 6,
-  Seven = 7,
+  Dos = 2,
+  Tres = 3,
+  Cuatro = 4,
+  Cinco = 5,
+  Seis = 6,
+  Siete = 7,
   Sota = 10,
   Caballo = 11,
   Rey = 12
@@ -298,6 +296,16 @@ class TrucoState : public State {
   int pending_truco_target_ = 0;
   Player pending_truco_caller_ = kInvalidPlayer;
   Player truco_next_raiser_ = kInvalidPlayer;
+
+  // Stack to handle nested betting states (e.g. Envido called in response to Truco)
+  struct TrucoResponseState {
+    PendingResponse pending_response;
+    Player pending_truco_caller;
+    int pending_truco_target;
+    Player cur_player; // The player who needs to respond to the suspended bet
+  };
+  std::vector<TrucoResponseState> response_stack_;
+  bool hand_over_ = false;
 };
 
 class TrucoGame : public Game {
@@ -315,11 +323,11 @@ class TrucoGame : public Game {
   std::vector<int> ObservationTensorShape() const override;
   int MaxGameLength() const override {
     // Game to 30 points. Each hand awards 1-4 points.
-    // Worst case: 30 hands at 1 point each (with many declined bets).
+    // Worst case: ~60 hands at 1 point each (e.g. 29-29 tie, then win).
     // Per hand: (cards dealt) + (cards played) + (max betting actions)
     int actions_per_hand = kHandSize * num_players_ + kHandSize * num_players_ +
                            kMaxBettingActions;
-    return 30 * actions_per_hand;  // Conservative: 30 hands max
+    return 2 * kTargetScore * actions_per_hand;  // Conservative: 60 hands max
   }
   int MaxChanceNodesInHistory() const override {
     return num_players_ * kHandSize;

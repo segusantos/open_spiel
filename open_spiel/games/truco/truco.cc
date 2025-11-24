@@ -17,6 +17,9 @@
 #include <algorithm>
 #include <array>
 #include <functional>
+#include <iostream>
+#include <limits>
+#include <random>
 #include <utility>
 
 #include "open_spiel/abseil-cpp/absl/memory/memory.h"
@@ -32,14 +35,13 @@ namespace truco {
 std::string PendingResponseToString(PendingResponse pending) {
   switch (pending) {
     case PendingResponse::kNone:
-      return "none";
+      return "No response pending";
     case PendingResponse::kEnvido:
-      return "envido";
+      return "Envido response pending";
     case PendingResponse::kTruco:
-      return "truco";
+      return "Truco response pending";
   }
-  SPIEL_DCHECK_FALSE(true);
-  return "unknown";
+  SpielFatalError("Unknown PendingResponse value");
 }
 
 std::ostream& operator<<(std::ostream& stream, PendingResponse pending) {
@@ -56,7 +58,7 @@ const GameType kGameType{
     GameType::ChanceMode::kExplicitStochastic,
     GameType::Information::kImperfectInformation,
     GameType::Utility::kZeroSum,
-    GameType::RewardModel::kTerminal,
+    GameType::RewardModel::kRewards,
     /*max_num_players=*/2,
     /*min_num_players=*/2,
     /*provides_information_state_string=*/true,
@@ -84,32 +86,33 @@ std::string CardString(const TrucoGame& game, Action action) {
 std::string EnvidoCallToString(EnvidoCall call) {
   switch (call) {
     case EnvidoCall::kEnvido:
-      return "Envido";
+      return "Envido called";
     case EnvidoCall::kRealEnvido:
-      return "RealEnvido";
+      return "Real Envido called";
     case EnvidoCall::kFaltaEnvido:
-      return "FaltaEnvido";
+      return "Falta Envido called";
   }
-  return "UnknownEnvido";
-}
-
-int TrucoTargetForAction(Action action) {
-  if (action == kTrucoAction) return 2;
-  if (action == kRetrucoAction) return 3;
-  if (action == kValeCuatroAction) return 4;
-  return 0;
+  SpielFatalError("Unknown EnvidoCall value");
 }
 
 std::string SpecialActionToString(Action action) {
-  if (action == kEnvidoAction) return "Envido";
-  if (action == kRealEnvidoAction) return "Real envido";
-  if (action == kFaltaEnvidoAction) return "Falta envido";
-  if (action == kTrucoAction) return "Truco";
-  if (action == kRetrucoAction) return "Retruco";
-  if (action == kValeCuatroAction) return "Vale cuatro";
-  if (action == kAcceptBetAction) return "Quiero";
-  if (action == kRejectBetAction) return "No quiero";
-  return "Unknown";
+  switch (action) {
+    case kEnvidoAction:
+      return "Envido";
+    case kRealEnvidoAction:
+      return "Real Envido";
+    case kFaltaEnvidoAction:
+      return "Falta Envido";
+    case kRaiseTrucoAction:
+      return "Raise Truco";
+    case kAcceptBetAction:
+      return "Quiero";
+    case kRejectBetAction:
+      return "No Quiero";
+    case kNewHandAction:
+      return "New Hand";
+  }
+  SpielFatalError("Unknown SpecialAction value");
 }
 
 }  // namespace
@@ -209,14 +212,14 @@ class TrucoObserver : public Observer {
     }
   }
 
-  // Game scores normalized to [-1, 1]. Vector of size num_players.
+  // Game scores normalized to [0, 1]. Vector of size num_players.
   // This is critical for agents to learn optimal Falta Envido strategies,
   // which depend on whether opponents are in "malas" (0-14) or "buenas"
   // (15-29).
   static void WriteGameScores(const TrucoState& state, Allocator* allocator) {
     auto out = allocator->Get("game_scores", {state.num_players_});
     for (Player p = 0; p < state.num_players_; ++p) {
-      // Normalize scores to [-1, 1] range (game plays to ±30)
+      // Normalize scores to [0, 1] range (game plays to 30)
       out.at(p) = static_cast<float>(state.game_points_[p]) / kTargetScore;
     }
   }
@@ -340,13 +343,13 @@ constexpr int getTrucoValue(Suit suit, Rank rank) {
       if (suit == Suit::Espada) return 14;
       if (suit == Suit::Basto) return 13;
       return 8;
-    case Rank::Seven:
+    case Rank::Siete:
       if (suit == Suit::Espada) return 12;
       if (suit == Suit::Oro) return 11;
       return 4;
-    case Rank::Three:
+    case Rank::Tres:
       return 10;
-    case Rank::Two:
+    case Rank::Dos:
       return 9;
     case Rank::Rey:
       return 7;
@@ -354,32 +357,32 @@ constexpr int getTrucoValue(Suit suit, Rank rank) {
       return 6;
     case Rank::Sota:
       return 5;
-    case Rank::Six:
+    case Rank::Seis:
       return 3;
-    case Rank::Five:
+    case Rank::Cinco:
       return 2;
-    case Rank::Four:
+    case Rank::Cuatro:
       return 1;
   }
-  return -1;
+  SpielFatalError("Unknown Suit/Rank combination");
 }
 
 constexpr int getEnvidoValue(Rank rank) {
   switch (rank) {
     case Rank::Ancho:
-    case Rank::Two:
-    case Rank::Three:
-    case Rank::Four:
-    case Rank::Five:
-    case Rank::Six:
-    case Rank::Seven:
+    case Rank::Dos:
+    case Rank::Tres:
+    case Rank::Cuatro:
+    case Rank::Cinco:
+    case Rank::Seis:
+    case Rank::Siete:
       return static_cast<int>(rank);
     case Rank::Sota:
     case Rank::Caballo:
     case Rank::Rey:
       return 0;
   }
-  return -1;
+  SpielFatalError("Unknown Rank value");
 }
 
 std::vector<Card> CreateDeck() {
@@ -388,8 +391,8 @@ std::vector<Card> CreateDeck() {
   int uid = 0;
   for (Suit suit : {Suit::Basto, Suit::Copa, Suit::Espada, Suit::Oro}) {
     for (Rank rank :
-         {Rank::Ancho, Rank::Two, Rank::Three, Rank::Four, Rank::Five,
-          Rank::Six, Rank::Seven, Rank::Sota, Rank::Caballo, Rank::Rey}) {
+         {Rank::Ancho, Rank::Dos, Rank::Tres, Rank::Cuatro, Rank::Cinco,
+          Rank::Seis, Rank::Siete, Rank::Sota, Rank::Caballo, Rank::Rey}) {
       deck.emplace_back(suit, rank, uid, getTrucoValue(suit, rank),
                         getEnvidoValue(rank));
       ++uid;
@@ -441,68 +444,99 @@ std::string TrucoState::ActionToString(Player player, Action move) const {
 std::string TrucoState::ToString() const {
   const TrucoGame& game = ParentGame();
   std::string result;
-  absl::StrAppend(&result, "\n================ Truco =================\n");
-  absl::StrAppend(&result, "Hand #", num_hands_played_ + 1, "    Score: P0=", game_points_[0], "  P1=", game_points_[1], "\n");
-  absl::StrAppend(&result, "Current Player: P", cur_player_, cur_player_ == mano_ ? " (Mano)" : "", "\n");
-  absl::StrAppend(&result, "----------------------------------------\n");
-  // Show hands
-  for (Player p = 0; p < num_players_; ++p) {
-    std::vector<std::string> cards;
-    for (int card : player_hands_[p]) {
-      if (!card_played_[card]) {
-        cards.push_back(CardString(game, card));
-      }
+
+  // Header
+  absl::StrAppend(&result,
+                  "+--------------------------------------------------+\n");
+  absl::StrAppend(&result, "| Truco - Hand ", num_hands_played_ + 1, "\n");
+  absl::StrAppend(&result, "| Score: P0 [ ", game_points_[0], " ]  vs  P1 [ ",
+                  game_points_[1], " ]\n");
+  absl::StrAppend(&result, "| Mano: P", mano_, "\n");
+  absl::StrAppend(&result,
+                  "+--------------------------------------------------+\n");
+
+  // P1 Hand (Top)
+  absl::StrAppend(&result, "| P1 Hand: ");
+  for (int card : player_hands_[1]) {
+    if (!card_played_[card]) {
+      absl::StrAppend(&result, "[", CardString(game, card), "] ");
     }
-    absl::StrAppend(&result, "Player ", p, (p == mano_ ? " (Mano)" : ""), " hand: ", absl::StrJoin(cards, ", "), "\n");
   }
-  absl::StrAppend(&result, "----------------------------------------\n");
-  // Show trick history
-  absl::StrAppend(&result, "Tricks:\n");
+  absl::StrAppend(&result, "\n");
+  absl::StrAppend(&result,
+                  "+--------------------------------------------------+\n");
+
+  // Tricks (Middle)
+  absl::StrAppend(&result, "| Tricks:\n");
   for (int t = 0; t < kNumTricks; ++t) {
     const Trick& trick = tricks_[t];
-    absl::StrAppend(&result, "  Trick ", t + 1, ": ");
     if (trick.cards.empty()) {
-      absl::StrAppend(&result, "(not started)");
+      absl::StrAppend(&result, "| ", t + 1, ". (not started)\n");
     } else {
+      absl::StrAppend(&result, "| ", t + 1, ". ");
       for (int i = 0; i < trick.cards.size(); ++i) {
-        absl::StrAppend(&result, "P", trick.players[i], ": ", CardString(game, trick.cards[i]));
-        if (i < trick.cards.size() - 1) absl::StrAppend(&result, ", ");
+        absl::StrAppend(&result, "P", trick.players[i], ": ",
+                        CardString(game, trick.cards[i]));
+        if (i < trick.cards.size() - 1) absl::StrAppend(&result, " | ");
       }
+      if (trick_results_[t] != kInvalidPlayer) {
+        absl::StrAppend(&result, " -> Winner: P", trick_results_[t]);
+      }
+      absl::StrAppend(&result, "\n");
     }
-    if (trick_results_[t] != kInvalidPlayer) {
-      absl::StrAppend(&result, "   Winner: P", trick_results_[t]);
-    }
-    absl::StrAppend(&result, "\n");
   }
-  absl::StrAppend(&result, "----------------------------------------\n");
-  // Show betting history
+  absl::StrAppend(&result,
+                  "+--------------------------------------------------+\n");
+
+  // P0 Hand (Bottom)
+  absl::StrAppend(&result, "| P0 Hand: ");
+  for (int card : player_hands_[0]) {
+    if (!card_played_[card]) {
+      absl::StrAppend(&result, "[", CardString(game, card), "] ");
+    }
+  }
+  absl::StrAppend(&result, "\n");
+  absl::StrAppend(&result,
+                  "+--------------------------------------------------+\n");
+
+  // Betting Info
+  absl::StrAppend(&result, "| Betting:\n");
   if (!envido_sequence_.empty() || envido_resolved_) {
-    absl::StrAppend(&result, "Envido sequence: ");
+    absl::StrAppend(&result, "|   Envido: ");
     for (size_t i = 0; i < envido_sequence_.size(); ++i) {
       absl::StrAppend(&result, EnvidoCallToString(envido_sequence_[i]));
       if (i < envido_sequence_.size() - 1) absl::StrAppend(&result, " > ");
     }
     if (pending_response_ == PendingResponse::kEnvido) {
-      absl::StrAppend(&result, " (awaiting response)");
+      absl::StrAppend(&result, " (Pending Response)");
     } else if (envido_resolved_) {
-      absl::StrAppend(&result, " (resolved)");
+      absl::StrAppend(&result, " (Resolved)");
     }
     absl::StrAppend(&result, "\n");
   }
-  absl::StrAppend(&result, "Truco level: ", truco_level_);
+  absl::StrAppend(&result, "|   Truco Level: ", truco_level_);
   if (pending_response_ == PendingResponse::kTruco) {
-    absl::StrAppend(&result, " (awaiting response)");
+    absl::StrAppend(&result, " (Pending Response)");
   }
   absl::StrAppend(&result, "\n");
-  absl::StrAppend(&result, "----------------------------------------\n");
-  absl::StrAppend(&result, "Next to play: P", cur_player_);
-  if (cur_player_ == mano_) absl::StrAppend(&result, " (Mano)");
-  absl::StrAppend(&result, "\n");
+  absl::StrAppend(&result,
+                  "+--------------------------------------------------+\n");
+
+  // Status
   if (IsTerminal()) {
-    absl::StrAppend(&result, "*** GAME OVER ***\n");
-    absl::StrAppend(&result, "Final returns: P0=", returns_[0], "  P1=", returns_[1], "\n");
+    absl::StrAppend(&result, "| GAME OVER\n");
+    absl::StrAppend(&result, "| Final Returns: P0=", returns_[0],
+                    "  P1=", returns_[1], "\n");
+  } else {
+    absl::StrAppend(
+        &result, "| Next Action: ",
+        (cur_player_ == kChancePlayerId ? "Chance"
+                                       : absl::StrCat("P", cur_player_)),
+        "\n");
   }
-  absl::StrAppend(&result,   "========================================\n");
+  absl::StrAppend(&result,
+                  "+--------------------------------------------------+\n");
+    
   return result;
 }
 
@@ -595,6 +629,9 @@ std::vector<Action> TrucoState::LegalActions() const {
   if (IsTerminal()) {
     return {};
   }
+  if (hand_over_) {
+    return {kNewHandAction};
+  }
   if (IsChanceNode()) {
     return LegalChanceOutcomes();
   }
@@ -621,14 +658,8 @@ std::vector<Action> TrucoState::LegalRegularActions() const {
     actions.push_back(kRealEnvidoAction);
     actions.push_back(kFaltaEnvidoAction);
   }
-  if (CanRaiseTruco(cur_player_, kTrucoAction)) {
-    actions.push_back(kTrucoAction);
-  }
-  if (CanRaiseTruco(cur_player_, kRetrucoAction)) {
-    actions.push_back(kRetrucoAction);
-  }
-  if (CanRaiseTruco(cur_player_, kValeCuatroAction)) {
-    actions.push_back(kValeCuatroAction);
+  if (CanRaiseTruco(cur_player_, kRaiseTrucoAction)) {
+    actions.push_back(kRaiseTrucoAction);
   }
   return actions;
 }
@@ -655,11 +686,18 @@ std::vector<Action> TrucoState::LegalEnvidoResponseActions() const {
 std::vector<Action> TrucoState::LegalTrucoResponseActions() const {
   SPIEL_CHECK_EQ(pending_response_, PendingResponse::kTruco);
   std::vector<Action> actions = {kAcceptBetAction, kRejectBetAction};
-  if (pending_truco_target_ == 2) {
-    actions.push_back(kRetrucoAction);
-  } else if (pending_truco_target_ == 3) {
-    actions.push_back(kValeCuatroAction);
+  if (pending_truco_target_ < 4) {
+    actions.push_back(kRaiseTrucoAction);
   }
+
+  // "El envido está primero": Can call Envido in response to Truco if window is
+  // open
+  if (EnvidoWindowOpen() && !envido_resolved_ && !envido_locked_) {
+    actions.push_back(kEnvidoAction);
+    actions.push_back(kRealEnvidoAction);
+    actions.push_back(kFaltaEnvidoAction);
+  }
+
   std::sort(actions.begin(), actions.end());
   return actions;
 }
@@ -672,27 +710,15 @@ bool TrucoState::CanCallEnvido(Player player) const {
   return true;
 }
 
-bool TrucoState::EnvidoWindowOpen() const {
-  if (current_trick_index_ == 0) {
-    return true;
-  }
-  return current_trick_index_ == 1 && cards_played_in_trick_ == 0;
-}
+bool TrucoState::EnvidoWindowOpen() const { return current_trick_index_ == 0; }
 
 bool TrucoState::CanRaiseTruco(Player player, Action action) const {
   if (player != cur_player_) return false;
   if (pending_response_ != PendingResponse::kNone) return false;
-  int target = TrucoTargetForAction(action);
-  if (target == 0) return false;
-  if (action == kTrucoAction) {
-    return truco_level_ == 1;
-  }
-  if (action == kRetrucoAction) {
-    return truco_level_ == 2 && truco_next_raiser_ == player;
-  }
-  if (action == kValeCuatroAction) {
-    return truco_level_ == 3 && truco_next_raiser_ == player;
-  }
+  if (action != kRaiseTrucoAction) return false;
+
+  if (truco_level_ == 1) return true;
+  if (truco_level_ < 4 && truco_next_raiser_ == player) return true;
   return false;
 }
 
@@ -701,18 +727,62 @@ std::vector<int> TrucoState::PlayerHand(Player player) const {
 }
 
 std::unique_ptr<State> TrucoState::ResampleFromInfostate(
-    int /*player_id*/, std::function<double()> /*rng*/) const {
-  // TODO: implement true information-state resampling. Returning a clone keeps
-  // the state consistent for now.
-  return Clone();
+    int player_id, std::function<double()> rng) const {
+  std::unique_ptr<State> clone = Clone();
+  auto* truco_clone = open_spiel::down_cast<TrucoState*>(clone.get());
+
+  Player opponent = 1 - player_id;
+  std::vector<int> candidates;
+  std::vector<int> opponent_slots;
+
+  // Identify unplayed cards in opponent's hand
+  for (size_t i = 0; i < truco_clone->player_hands_[opponent].size(); ++i) {
+    int card = truco_clone->player_hands_[opponent][i];
+    if (!truco_clone->card_played_[card]) {
+      opponent_slots.push_back(i);
+      candidates.push_back(card);
+    }
+  }
+
+  // Identify cards in the deck
+  for (int card = 0; card < kNumCards; ++card) {
+    if (truco_clone->card_owner_[card] == kInvalidPlayer) {
+      candidates.push_back(card);
+    }
+  }
+
+  // Shuffle candidates
+  // Use the provided rng to seed a generator
+  // Note: rng() returns double in [0, 1).
+  uint32_t seed =
+      static_cast<uint32_t>(rng() * std::numeric_limits<uint32_t>::max());
+  std::mt19937 gen(seed);
+  std::shuffle(candidates.begin(), candidates.end(), gen);
+
+  // Redistribute to opponent
+  for (int slot : opponent_slots) {
+    int new_card = candidates.back();
+    candidates.pop_back();
+    truco_clone->player_hands_[opponent][slot] = new_card;
+    truco_clone->card_owner_[new_card] = opponent;
+  }
+
+  // Redistribute to deck
+  for (int card : candidates) {
+    truco_clone->card_owner_[card] = kInvalidPlayer;
+  }
+
+  return clone;
 }
 
 void TrucoState::DoApplyAction(Action move) {
-  // Reset rewards for player actions, but not for chance actions (dealing)
-  // This preserves rewards from hand-ending actions through the dealing phase,
-  // but resets them once dealing is complete and play resumes
-  if (cur_player_ != kChancePlayerId) {
-    std::fill(rewards_.begin(), rewards_.end(), 0.0);
+  // Reset rewards for all actions.
+  std::fill(rewards_.begin(), rewards_.end(), 0.0);
+
+  if (hand_over_) {
+    SPIEL_CHECK_EQ(move, kNewHandAction);
+    StartNewHand();
+    return;
   }
 
   if (cur_player_ == kChancePlayerId) {
@@ -786,7 +856,16 @@ void TrucoState::ApplyEnvidoCall(Action action) {
     call = EnvidoCall::kFaltaEnvido;
   }
 
-  if (pending_response_ == PendingResponse::kNone) {
+  if (pending_response_ == PendingResponse::kTruco) {
+    // "El envido está primero": Suspend Truco, start Envido
+    response_stack_.push_back({pending_response_, pending_truco_caller_,
+                               pending_truco_target_, cur_player_});
+    pending_response_ = PendingResponse::kEnvido;
+    // The player who called Envido (current player) becomes the last caller of
+    // Envido The opponent must respond to Envido
+    envido_last_caller_ = cur_player_;
+    cur_player_ = Opponent(cur_player_);
+  } else if (pending_response_ == PendingResponse::kNone) {
     Player caller = cur_player_;
     BeginPendingResponse(PendingResponse::kEnvido, caller);
     envido_last_caller_ = caller;
@@ -803,13 +882,15 @@ void TrucoState::ApplyEnvidoCall(Action action) {
 void TrucoState::ApplyTrucoCall(Action action) {
   // Calling truco doesn't immediately award points
   std::fill(rewards_.begin(), rewards_.end(), 0.0);
+  SPIEL_CHECK_EQ(action, kRaiseTrucoAction);
 
-  int target = TrucoTargetForAction(action);
-  SPIEL_CHECK_GT(target, 0);
-
-  if (action == kTrucoAction) {
-    envido_locked_ = true;
+  int target = 0;
+  if (pending_response_ == PendingResponse::kTruco) {
+    target = pending_truco_target_ + 1;
+  } else {
+    target = truco_level_ + 1;
   }
+  SPIEL_CHECK_LE(target, 4);
 
   if (pending_response_ == PendingResponse::kTruco) {
     SPIEL_CHECK_GT(pending_truco_target_, 0);
@@ -867,19 +948,32 @@ void TrucoState::ResolveEnvidoAcceptance() {
   SPIEL_CHECK_EQ(pending_response_, PendingResponse::kEnvido);
   Player winner = DetermineEnvidoWinner();
   int points = 0;
-  if (!envido_sequence_.empty() && envido_sequence_.back() == EnvidoCall::kFaltaEnvido) {
+  if (!envido_sequence_.empty() &&
+      envido_sequence_.back() == EnvidoCall::kFaltaEnvido) {
     // Falta Envido is not cumulative: only its value is awarded
     points = FaltaEnvidoValue();
   } else {
     points = SumEnvidoPoints(/*include_last=*/true);
   }
   AwardPoints(winner, points);
-  pending_response_ = PendingResponse::kNone;
+
   envido_resolved_ = true;
   envido_locked_ = true;
   envido_sequence_.clear();
   envido_last_caller_ = kInvalidPlayer;
-  RestoreTurnAfterBet();
+
+  if (!response_stack_.empty()) {
+    // Restore Truco state
+    TrucoResponseState state = response_stack_.back();
+    response_stack_.pop_back();
+    pending_response_ = state.pending_response;
+    pending_truco_caller_ = state.pending_truco_caller;
+    pending_truco_target_ = state.pending_truco_target;
+    cur_player_ = state.cur_player;
+  } else {
+    pending_response_ = PendingResponse::kNone;
+    RestoreTurnAfterBet();
+  }
 }
 
 void TrucoState::ResolveEnvidoDecline() {
@@ -889,12 +983,24 @@ void TrucoState::ResolveEnvidoDecline() {
   SPIEL_CHECK_NE(envido_last_caller_, kInvalidPlayer);
   Player winner = envido_last_caller_;
   AwardPoints(winner, decline_points);
-  pending_response_ = PendingResponse::kNone;
+
   envido_resolved_ = true;
   envido_locked_ = true;
   envido_sequence_.clear();
   envido_last_caller_ = kInvalidPlayer;
-  RestoreTurnAfterBet();
+
+  if (!response_stack_.empty()) {
+    // Restore Truco state
+    TrucoResponseState state = response_stack_.back();
+    response_stack_.pop_back();
+    pending_response_ = state.pending_response;
+    pending_truco_caller_ = state.pending_truco_caller;
+    pending_truco_target_ = state.pending_truco_target;
+    cur_player_ = state.cur_player;
+  } else {
+    pending_response_ = PendingResponse::kNone;
+    RestoreTurnAfterBet();
+  }
 }
 
 void TrucoState::ResolveTrucoAcceptance() {
@@ -907,6 +1013,10 @@ void TrucoState::ResolveTrucoAcceptance() {
   pending_truco_target_ = 0;
   pending_truco_caller_ = kInvalidPlayer;
   pending_response_ = PendingResponse::kNone;
+
+  // Accepting Truco closes the Envido window
+  envido_locked_ = true;
+
   if (truco_level_ < 4) {
     truco_next_raiser_ = cur_player_;
   } else {
@@ -931,14 +1041,15 @@ void TrucoState::ResolveTrucoDecline() {
   num_hands_played_++;
 
   // Check if game reached 30 points or should continue to next hand
-  // Use absolute value check to handle both positive and negative scores
-  if (std::abs(game_points_[0]) >= kTargetScore ||
-      std::abs(game_points_[1]) >= kTargetScore) {
+  // Since scores are now absolute positive integers, we just check >=
+  // kTargetScore
+  if (game_points_[0] >= kTargetScore || game_points_[1] >= kTargetScore) {
     terminal_ = true;
     cur_player_ = kTerminalPlayerId;
   } else {
     // Continue to next hand
-    StartNewHand();
+    hand_over_ = true;
+    cur_player_ = winner_;
   }
 }
 
@@ -948,37 +1059,26 @@ void TrucoState::AwardPoints(Player player, int points) {
   SPIEL_CHECK_GE(points, 0);
   if (points == 0) return;
 
-  // Calculate what the new scores would be
-  int new_player_score = game_points_[player] + points;
-  int new_opponent_score = game_points_[Opponent(player)] - points;
+  // 1. Update absolute game scores (The "Scoreboard")
+  // Truco is a race: points only go up (or stay same), they don't subtract from
+  // opponent.
+  int old_score = game_points_[player];
+  int new_score = std::min(old_score + points, kTargetScore);
+  int actual_points_gained = new_score - old_score;
 
-  // Clamp to ±kTargetScore to ensure we never exceed MinUtility/MaxUtility
-  // This maintains the OpenSpiel invariant that sum(rewards) == final returns
-  if (new_player_score > kTargetScore) {
-    new_player_score = kTargetScore;
-  }
-  if (new_opponent_score < -kTargetScore) {
-    new_opponent_score = -kTargetScore;
-  }
+  game_points_[player] = new_score;
+  // Opponent's score does NOT change.
 
-  // Calculate actual rewards as the clamped delta
-  int actual_player_reward = new_player_score - game_points_[player];
-  int actual_opponent_reward =
-      new_opponent_score - game_points_[Opponent(player)];
-
-  // Update game scores with clamped values
-  game_points_[player] = new_player_score;
-  game_points_[Opponent(player)] = new_opponent_score;
-
-  // Award clamped rewards for this action
+  // 2. Calculate Rewards (Zero-Sum for RL)
+  // We reward the agent for the points gained. To keep the game zero-sum for RL
+  // algorithms, we penalize the opponent by the same amount.
   std::fill(rewards_.begin(), rewards_.end(), 0.0);
-  rewards_[player] = static_cast<double>(actual_player_reward);
-  rewards_[Opponent(player)] = static_cast<double>(actual_opponent_reward);
+  rewards_[player] = static_cast<double>(actual_points_gained);
+  rewards_[Opponent(player)] = -static_cast<double>(actual_points_gained);
 
-  // Update returns (same as clamped game_points_)
-  returns_[player] = static_cast<double>(game_points_[player]);
-  returns_[Opponent(player)] =
-      static_cast<double>(game_points_[Opponent(player)]);
+  // 3. Update Returns (Cumulative Zero-Sum Utility)
+  returns_[player] += rewards_[player];
+  returns_[Opponent(player)] += rewards_[Opponent(player)];
 }
 
 int TrucoState::SumEnvidoPoints(bool include_last) const {
@@ -1086,8 +1186,7 @@ void TrucoState::FinishTrick(Player trick_winner) {
   // non-terminal trick awards nothing
   int cards_dealt_before = cards_dealt_;
   MaybeResolveHand(trick_winner);
-  bool hand_ended =
-      (cards_dealt_ < cards_dealt_before);  // StartNewHand() was called
+  bool hand_ended = hand_over_;
 
   // Don't reset rewards if game became terminal (either hand ended or game
   // ended)
@@ -1129,12 +1228,14 @@ void TrucoState::MaybeResolveHand(Player latest_trick_winner) {
   } else if (current_trick_index_ == 1) {
     Player first = trick_results_[0];
     Player second = trick_results_[1];
+    // std::cout << "Trick 1 results: first=" << first << " second=" << second
+    // << std::endl;
     if (first == kTiePlayer && second != kTiePlayer) {
       winner_ = second;
     } else if (first != kTiePlayer && second == kTiePlayer) {
       winner_ = first;
     } else if (first == kTiePlayer && second == kTiePlayer) {
-      winner_ = mano_;
+      // Both first and second tricks tied: the third trick decides.
     }
   } else if (current_trick_index_ == 2) {
     Player third = trick_results_[2];
@@ -1156,20 +1257,20 @@ void TrucoState::MaybeResolveHand(Player latest_trick_winner) {
     AwardPoints(winner_, truco_level_);
     num_hands_played_++;
 
-    // Check if either player reached ±30 points to win the game
-    // Use absolute value check to ensure we never exceed ±30
-    if (std::abs(game_points_[0]) >= kTargetScore ||
-        std::abs(game_points_[1]) >= kTargetScore) {
+    // Check if either player reached 30 points to win the game
+    if (game_points_[0] >= kTargetScore || game_points_[1] >= kTargetScore) {
       terminal_ = true;
       cur_player_ = kTerminalPlayerId;
     } else {
       // Continue to next hand
-      StartNewHand();
+      hand_over_ = true;
+      cur_player_ = winner_;
     }
   }
 }
 
 void TrucoState::StartNewHand() {
+  hand_over_ = false;
   // Reset hand-specific state while preserving game_points_
   winner_ = kInvalidPlayer;
   cards_dealt_ = 0;
@@ -1207,6 +1308,7 @@ void TrucoState::StartNewHand() {
   pending_truco_target_ = 0;
   pending_truco_caller_ = kInvalidPlayer;
   truco_next_raiser_ = kInvalidPlayer;
+  response_stack_.clear();
 
   // Start dealing phase
   cur_player_ = kChancePlayerId;
