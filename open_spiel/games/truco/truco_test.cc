@@ -286,23 +286,16 @@ void TrucoImmediateRetrucoTest() {
 void TrucoSecondTrickTurnOrderTest() {
   auto game = LoadGame("truco");
   auto state = DealFixedHand(game, {3, 20, 4, 21, 5, 22});
-  // Updated action IDs: kRejectBetAction=45
-  std::vector<Action> actions = {40, 41, 45, 3, 20};
+  std::vector<Action> actions = {kEnvidoAction, kRealEnvidoAction,
+                                 kRejectBetAction, 3, 20};
   for (Action action : actions) {
     state->ApplyActionWithLegalityCheck(action);
   }
-  std::cout << "After actions CurrentPlayer=" << state->CurrentPlayer()
-            << std::endl;
-  std::cout << "Legal actions:";
+  
   auto legal_actions = state->LegalActions();
-  for (Action action : legal_actions) {
-    std::cout << " " << action << " ("
-              << state->ActionToString(state->CurrentPlayer(), action) << ")";
-  }
-  std::cout << std::endl;
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
-  SPIEL_CHECK_TRUE(std::find(legal_actions.begin(), legal_actions.end(), 4) ==
-                   legal_actions.end());
+  SPIEL_CHECK_TRUE(std::find(legal_actions.begin(), legal_actions.end(),
+                             kRejectBetAction) == legal_actions.end());
   SPIEL_CHECK_TRUE(std::find(legal_actions.begin(), legal_actions.end(), 21) !=
                    legal_actions.end());
 }
@@ -310,8 +303,8 @@ void TrucoSecondTrickTurnOrderTest() {
 void TrucoSecondTrickCloneTest() {
   auto game = LoadGame("truco");
   auto state = DealFixedHand(game, {3, 20, 4, 21, 5, 22});
-  // Updated action IDs: kRejectBetAction=45
-  std::vector<Action> actions = {40, 41, 45, 3, 20};
+  std::vector<Action> actions = {kEnvidoAction, kRealEnvidoAction,
+                                 kRejectBetAction, 3, 20};
   for (Action action : actions) {
     std::unique_ptr<State> clone = state->Clone();
     state->ApplyActionWithLegalityCheck(action);
@@ -320,8 +313,8 @@ void TrucoSecondTrickCloneTest() {
   }
   auto legal_actions = state->LegalActions();
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
-  SPIEL_CHECK_TRUE(std::find(legal_actions.begin(), legal_actions.end(), 4) ==
-                   legal_actions.end());
+  SPIEL_CHECK_TRUE(std::find(legal_actions.begin(), legal_actions.end(),
+                             kRejectBetAction) == legal_actions.end());
 }
 
 void FaltaEnvidoAcceptTest() {
@@ -331,25 +324,14 @@ void FaltaEnvidoAcceptTest() {
   auto state = DealFixedHand(game, {34, 0, 35, 1, 36, 2});
   state->ApplyAction(kFaltaEnvidoAction);
   state->ApplyAction(kAcceptBetAction);
-  // P0 should win with 33 vs 25. Falta Envido at start: P1 in malas (0 pts),
-  // so P0 gets (15-0) = 15 points
+  // According to the Wikipedia rule implemented: both teams are in "malas"
+  // (scores 0-14) so Falta Envido at the start awards enough points to win
+  // the partido (reach kTargetScore). The winner should immediately get
+  // the points required to reach kTargetScore and the game becomes terminal.
   const auto returns_after_envido = state->Returns();
-  SPIEL_CHECK_EQ(returns_after_envido[0], 15);
-  SPIEL_CHECK_EQ(returns_after_envido[1], -15);
-  // Hand should continue
-  SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(34);  // P0 plays 5 de Oro
-  state->ApplyAction(0);   // P1 plays 1 de Basto (Ancho de Basto wins)
-  state->ApplyAction(1);   // P1 leads with 2 de Basto
-  state->ApplyAction(35);  // P0 plays 6 de Oro
-  // After one hand, game should NOT be terminal (plays to 30)
-  SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(kNewHandAction);
-  SPIEL_CHECK_TRUE(state->IsChanceNode());  // Dealing for next hand
-  const auto final_returns = state->Returns();
-  // P1 won 2 tricks so gets 1 point for the hand, total: 15-1=14
-  SPIEL_CHECK_EQ(final_returns[0], 14);
-  SPIEL_CHECK_EQ(final_returns[1], -14);
+  SPIEL_CHECK_EQ(returns_after_envido[0], kTargetScore);
+  SPIEL_CHECK_EQ(returns_after_envido[1], -kTargetScore);
+  SPIEL_CHECK_TRUE(state->IsTerminal());
 }
 
 void EnvidoTieGoesToManoTest() {
@@ -508,6 +490,78 @@ void EnvidoIllegalInSecondTrickTest() {
                              kRaiseTrucoAction) != legal_actions.end());
 }
 
+void TensorShapeTest() {
+  std::shared_ptr<const Game> game = LoadGame("truco");
+  std::unique_ptr<State> state = game->NewInitialState();
+  
+  // Check Observation Tensor Shape
+  std::vector<int> obs_shape = game->ObservationTensorShape();
+  int expected_size = 0;
+  // Player: 2
+  expected_size += 2;
+  // Hand: 40
+  expected_size += 40;
+  // Tricks: 3 * 2 * 40 = 240
+  expected_size += 240;
+  // Trick Info: 3 * (2+1) + 3 * 2 = 9 + 6 = 15
+  expected_size += 15;
+  // Game Score: 2
+  expected_size += 2;
+  // Truco Level: 4
+  expected_size += 4;
+  // Envido Sequence: 4 * 3 = 12
+  expected_size += 12;
+  // Envido State: 2
+  expected_size += 2;
+  // Envido Score: 2
+  expected_size += 2;
+  // Mano: 2
+  expected_size += 2;
+  
+  int calculated_size = obs_shape[0];
+  SPIEL_CHECK_EQ(calculated_size, expected_size);
+}
+
+void TrickAnalysisTensorTest() {
+  std::shared_ptr<const Game> game = LoadGame("truco");
+  std::unique_ptr<State> state = game->NewInitialState();
+  
+  // Deal cards
+  while (state->IsChanceNode()) {
+    state->ApplyAction(state->LegalActions()[0]);
+  }
+  
+  // P0 plays card 0
+  state->ApplyAction(state->LegalActions()[0]);
+  // P1 plays card 0 (assuming different card)
+  state->ApplyAction(state->LegalActions()[0]);
+  
+  // Trick 1 finished.
+  
+  std::vector<float> tensor(game->ObservationTensorSize());
+  state->ObservationTensor(0, absl::MakeSpan(tensor));
+  
+  // Verify that some bits in the trick analysis section are set
+  // We need to calculate the offset
+  int offset = 2 + 40 + 240; // Player + Hand + Tricks
+  
+  // Trick Winners (3 * 3 = 9 bits)
+  // Trick Leaders (3 * 2 = 6 bits)
+  
+  bool found_winner = false;
+  for (int i = 0; i < 9; ++i) {
+    if (tensor[offset + i] == 1.0) found_winner = true;
+  }
+  
+  bool found_leader = false;
+  for (int i = 0; i < 6; ++i) {
+    if (tensor[offset + 9 + i] == 1.0) found_leader = true;
+  }
+  
+  SPIEL_CHECK_TRUE(found_winner);
+  SPIEL_CHECK_TRUE(found_leader);
+}
+
 void TieFirstTieSecondThirdDecidesTest() {
   auto game = LoadGame("truco");
   // P0 (Mano): 4 Oro (33), 5 Oro (34), 1 Espada (20)
@@ -550,6 +604,28 @@ void TieFirstTieSecondThirdDecidesTest() {
   }
 }
 
+void ThirdTrickLeaderTest() {
+  auto game = LoadGame("truco");
+  // Deal: P0 gets 20 (1 Espada), 3 (4 Basto), 1 (4 Copa). 
+  //       P1 gets 13 (1 Basto), 10 (1 Copa), 26 (7 Espada).
+  auto state = DealFixedHand(game, {20, 13, 3, 10, 1, 26});
+  
+  // Trick 1
+  state->ApplyAction(20); // P0: 1 Espada
+  state->ApplyAction(13); // P1: 1 Basto
+  // P0 wins (14 > 13).
+  
+  // Trick 2
+  SPIEL_CHECK_EQ(state->CurrentPlayer(), 0); // P0 leads
+  state->ApplyAction(3);  // P0: 4 Basto
+  state->ApplyAction(26); // P1: 7 Espada
+  // P1 wins (12 > 1).
+  
+  // Trick 3
+  // P1 should lead because they won the previous trick.
+  SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
+}
+
 }  // namespace
 }  // namespace truco
 }  // namespace open_spiel
@@ -571,11 +647,14 @@ int main(int argc, char** argv) {
   open_spiel::truco::EnvidoFirstTest();
   open_spiel::truco::FullGameToThirtyTest();
   open_spiel::truco::AbsoluteScoreTest();
+  open_spiel::truco::TensorShapeTest();
+  open_spiel::truco::TrickAnalysisTensorTest();
 
   // New tests
   open_spiel::truco::TieFirstTrickWinnerSecondTakesHandTest();
   open_spiel::truco::FirstWonSecondTiedWinnerFirstTakesHandTest();
   open_spiel::truco::RetrucoDeclinePointsTest();
   open_spiel::truco::EnvidoIllegalInSecondTrickTest();
+  open_spiel::truco::ThirdTrickLeaderTest();
   open_spiel::truco::TieFirstTieSecondThirdDecidesTest();
 }

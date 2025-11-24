@@ -12,63 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Truco is a popular trick-taking card game in South America, particularly
-// Argentina, Brazil, and Uruguay. This implementation follows the Argentine
-// rules for 2-player Truco.
+// Truco Argentino is a popular trick-taking card game from South America.
+// https://en.wikipedia.org/wiki/Truco_argentino
 //
-// Game Overview:
-// - Deck: 40 Spanish cards (4 suits × 10 ranks, excluding 8s, 9s and jokers)
-// - Players: 2
-// - Deal: Each player receives 3 cards
-// - Structure: Best of 3 tricks per hand
-//
-// Card Values (Truco):
-// Cards are ranked for trick-taking from strongest to weakest:
-//   1. Ancho de Espada (1 of Swords) = 14
-//   2. Ancho de Basto (1 of Clubs) = 13
-//   3. 7 de Espada = 12, 7 de Oro = 11
-//   4. All 3s = 10
-//   5. All 2s = 9
-//   6. Ancho de Copa/Oro = 8
-//   7. Rey (King) = 7, Caballo (Knight) = 6, Sota (Jack) = 5
-//   8. 7 de Copa/Basto = 4
-//   9. All 6s = 3, 5s = 2, 4s = 1
-//
-// Envido (Optional Side Bet):
-// Players can wager on who has the best "envido" (sum of two same-suit cards
-// plus 20, or highest card if no pair). Cards count as face value (1-7) or 0
-// for face cards. Envido bets can be called before the first trick is complete:
-//   - Envido: 2 points
-//   - Real Envido: 3 points
-//   - Falta Envido: Dynamic based on opponent's score:
-//       * If opponent in "malas" (0-14 points): winner gets points needed for
-//       opponent to reach 15
-//       * If opponent in "buenas" (15-29 points): winner gets points needed for
-//       opponent to reach 30
-// Players can accept (Quiero), decline (No Quiero), or raise further.
-//
-// Truco (Main Betting):
-// Players can raise the stakes of the hand at any time:
-//   - Truco: Raises stakes to 2 points
-//   - Retruco: Raises to 3 points (only the opponent of the Truco caller)
-//   - Vale Cuatro: Raises to 4 points (back to the Truco caller)
-// The opponent can accept (Quiero) or decline (No Quiero), immediately ending
-// the hand.
-//
-// Trick Resolution:
-// - Highest card wins the trick
-// - Ties go to the "mano" (starting player) if it's the first trick, otherwise
-//   the trick winner becomes the leader for the next trick
-// - First to win 2 tricks wins the hand
-// - If tricks are tied, the "mano" wins
-//
-// Game Structure:
-// The game is played to 30 points across multiple hands. Each hand awards 1-4
-// points based on Truco betting. The score is divided into:
-//   - "Malas" (bad ones): 0-14 points
-//   - "Buenas" (good ones): 15-29 points
-// The first player to reach 30 points wins the game. The "mano" (starting
-// player) alternates each hand.
+// This implementation follows the 2-player Argentine rules without Flor.
 //
 // Parameters:
 //   "players"          int    number of players               (default = 2)
@@ -94,20 +41,21 @@
 namespace open_spiel {
 namespace truco {
 
-inline constexpr int kInvalidCard = -10000;
 inline constexpr int kDefaultPlayers = 2;
 inline constexpr int kDefaultStartingPlayer = 0;
-inline constexpr int kNumSuits = 4;   // Basto, Copa, Espada, Oro
-inline constexpr int kNumRanks = 10;  // 1-7, 10 (Sota), 11 (Caballo), 12 (Rey)
+inline constexpr int kNumSuits = 4;
+inline constexpr int kNumRanks = 10;
 inline constexpr int kNumCards = kNumSuits * kNumRanks;
 inline constexpr int kHandSize = 3;
 inline constexpr int kNumTricks = 3;
 inline constexpr Player kTiePlayer = -2;
-inline constexpr int kEnvidoTensorSize = 3;
-inline constexpr int kTrucoTensorSize = 4;
-inline constexpr int kPendingTensorSize = 3;
-inline constexpr int kTargetScore = 30;           // Game is played to 30 points
-inline constexpr int kMalasBuenasThreshold = 15;  // Malas: 0-14, Buenas: 15-29
+inline constexpr int kNumEnvidoTypes = 3;
+inline constexpr int kMaxEnvidoSequenceActions = 4;
+inline constexpr int kEnvidoSequenceTensorSize = kMaxEnvidoSequenceActions * kNumEnvidoTypes;
+inline constexpr int kTrucoLevelBits = 4;
+inline constexpr int kEnvidoStateBits = 2;
+inline constexpr int kTargetScore = 30;
+inline constexpr int kMalasBuenasThreshold = 15;
 
 inline constexpr int kEnvidoAction = kNumCards;
 inline constexpr int kRealEnvidoAction = kNumCards + 1;
@@ -118,10 +66,7 @@ inline constexpr int kRejectBetAction = kNumCards + 5;
 inline constexpr int kNewHandAction = kNumCards + 6;
 inline constexpr int kNumSpecialActions = 7;
 inline constexpr int kNumDistinctTrucoActions = kNumCards + kNumSpecialActions;
-inline constexpr int kMaxEnvidoSequenceActions = 4;
-inline constexpr int kMaxTrucoSequenceActions = 6;
-inline constexpr int kMaxBettingActions =
-    kMaxEnvidoSequenceActions + kMaxTrucoSequenceActions;
+inline constexpr int kMaxBettingActions = 10;
 
 inline bool IsCardAction(Action action) {
   return action >= 0 && action < kNumCards;
@@ -177,10 +122,6 @@ struct Card {
 
 std::vector<Card> CreateDeck();
 
-inline constexpr int kMaxChanceActions = kHandSize * kDefaultPlayers;
-
-// Helper structure recording the cards played in a trick alongside the
-// chronological order of players.
 struct Trick {
   Trick() = default;
   std::vector<Action> cards;
@@ -208,8 +149,7 @@ class TrucoState : public State {
   std::vector<std::pair<Action, double>> ChanceOutcomes() const override;
   std::vector<Action> LegalActions() const override;
 
-  // Additional methods.
-  std::vector<int> PlayerHand(Player player) const;
+  const std::vector<int>& PlayerHand(Player player) const;
   Player starting_player() const { return starting_player_; }
   int current_trick() const { return current_trick_index_; }
   const std::vector<Player>& trick_results() const { return trick_results_; }
@@ -256,6 +196,14 @@ class TrucoState : public State {
   int SumEnvidoPoints(bool include_last) const;
   int EnvidoCallValue(EnvidoCall call) const;
   int FaltaEnvidoValue() const;
+  int FaltaEnvidoValue(Player loser) const;
+  int ComputeEnvidoScore(const std::vector<int>& cards) const;
+  std::vector<std::vector<int>> FindCardCombinationsWithEnvidoScore(
+      const std::vector<int>& available_cards, int num_cards, 
+      int target_score) const;
+  std::vector<std::vector<int>> FindCardCombinationsWithEnvidoScoreGivenFixed(
+      const std::vector<int>& available_cards, int num_cards,
+      const std::vector<int>& fixed_cards, int target_score) const;
   int PlayerEnvidoScore(Player player) const;
   Player DetermineEnvidoWinner() const;
   Player Opponent(Player player) const { return 1 - player; }
@@ -290,6 +238,7 @@ class TrucoState : public State {
   Player envido_last_caller_ = kInvalidPlayer;
   bool envido_resolved_ = false;
   bool envido_locked_ = false;
+  std::array<int, 2> revealed_envido_scores_ = {-1, -1};  // Public info after resolution
 
   // Truco betting data.
   int truco_level_ = 1;
@@ -297,16 +246,17 @@ class TrucoState : public State {
   Player pending_truco_caller_ = kInvalidPlayer;
   Player truco_next_raiser_ = kInvalidPlayer;
 
-  // Stack to handle nested betting states (e.g. Envido called in response to
-  // Truco)
   struct TrucoResponseState {
     PendingResponse pending_response;
     Player pending_truco_caller;
     int pending_truco_target;
-    Player cur_player;  // The player who needs to respond to the suspended bet
+    Player cur_player;
   };
   std::vector<TrucoResponseState> response_stack_;
   bool hand_over_ = false;
+
+  std::vector<std::pair<Player, EnvidoCall>> envido_log_;
+  std::vector<std::pair<Player, int>> truco_log_;
 };
 
 class TrucoGame : public Game {
@@ -323,12 +273,9 @@ class TrucoGame : public Game {
   std::vector<int> InformationStateTensorShape() const override;
   std::vector<int> ObservationTensorShape() const override;
   int MaxGameLength() const override {
-    // Game to 30 points. Each hand awards 1-4 points.
-    // Worst case: ~60 hands at 1 point each (e.g. 29-29 tie, then win).
-    // Per hand: (cards dealt) + (cards played) + (max betting actions)
     int actions_per_hand = kHandSize * num_players_ + kHandSize * num_players_ +
                            kMaxBettingActions;
-    return 2 * kTargetScore * actions_per_hand;  // Conservative: 60 hands max
+    return 2 * kTargetScore * actions_per_hand;
   }
   int MaxChanceNodesInHistory() const override {
     return num_players_ * kHandSize;
@@ -340,18 +287,16 @@ class TrucoGame : public Game {
   Player mano() const { return starting_player_; }
 
   std::string ActionToString(Player player, Action action) const override;
-  // New Observation API
   std::shared_ptr<Observer> MakeObserver(
       absl::optional<IIGObservationType> iig_obs_type,
       const GameParameters& params) const override;
 
-  // Used to implement the old observation API.
   std::shared_ptr<TrucoObserver> default_observer_;
   std::shared_ptr<TrucoObserver> info_state_observer_;
 
  private:
-  int num_players_;  // Number of players.
-  int total_cards_;  // Number of cards total cards in the game.
+  int num_players_;
+  int total_cards_;
   int starting_player_;
   const std::vector<Card> deck_;
 };
