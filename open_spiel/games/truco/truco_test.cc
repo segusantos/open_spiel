@@ -132,15 +132,15 @@ void StartingPlayerAndDeterministicPlayTest() {
   SPIEL_CHECK_FALSE(state->IsChanceNode());
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
 
-  state->ApplyAction(20);
-  SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
   state->ApplyAction(0);
+  SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
+  state->ApplyAction(20);
 
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
+  SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
 
   state->ApplyAction(21);
-  SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
+  SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
   state->ApplyAction(1);
 
   SPIEL_CHECK_FALSE(state->IsTerminal());
@@ -149,8 +149,8 @@ void StartingPlayerAndDeterministicPlayTest() {
   state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const std::vector<double> returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], -1.0);
-  SPIEL_CHECK_EQ(returns[1], 1.0);
+  SPIEL_CHECK_EQ(returns[0], 1.0);
+  SPIEL_CHECK_EQ(returns[1], -1.0);
 
   const std::string info_string = state->InformationStateString(0);
   SPIEL_CHECK_NE(info_string.find("H:"), std::string::npos);
@@ -200,8 +200,8 @@ void EnvidoRaiseDeclineTest() {
   state->ApplyAction(kRealEnvidoAction);
   state->ApplyAction(kRejectBetAction);
   const auto after_decline = state->Returns();
-  SPIEL_CHECK_EQ(after_decline[0], -3);
-  SPIEL_CHECK_EQ(after_decline[1], 3);
+  SPIEL_CHECK_EQ(after_decline[0], -2);
+  SPIEL_CHECK_EQ(after_decline[1], 2);
   state->ApplyAction(3);
   state->ApplyAction(20);
   state->ApplyAction(21);
@@ -210,8 +210,8 @@ void EnvidoRaiseDeclineTest() {
   state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], -4);
-  SPIEL_CHECK_EQ(returns[1], 4);
+  SPIEL_CHECK_EQ(returns[0], -3);
+  SPIEL_CHECK_EQ(returns[1], 3);
 }
 
 void TrucoDeclineTest() {
@@ -524,6 +524,26 @@ void ThirdTrickLeaderTest() {
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 1);
 }
 
+void EnvidoEnvidoRejectTest() {
+  auto game = LoadGame("truco");
+  // P0: 1 Espada (20), 7 Oro (36), 3 Basto (2)
+  // P1: 7 Espada (26), 6 Espada (25), 5 Espada (24)
+  auto state = DealFixedHand(game, {20, 26, 36, 25, 2, 24});
+
+  // P0 calls Envido
+  state->ApplyAction(kEnvidoAction);
+  // P1 raises Envido
+  state->ApplyAction(kEnvidoAction);
+  // P0 rejects
+  state->ApplyAction(kRejectBetAction);
+
+  // Check returns (should be -2, 2)
+  // The bug report says it gives 3 points.
+  auto returns = state->Returns();
+  SPIEL_CHECK_EQ(returns[0], -2);
+  SPIEL_CHECK_EQ(returns[1], 2);
+}
+
 }  // namespace
 }  // namespace truco
 }  // namespace open_spiel
@@ -555,4 +575,5 @@ int main(int argc, char** argv) {
   open_spiel::truco::EnvidoIllegalInSecondTrickTest();
   open_spiel::truco::ThirdTrickLeaderTest();
   open_spiel::truco::TieFirstTieSecondThirdDecidesTest();
+  open_spiel::truco::EnvidoEnvidoRejectTest();
 }

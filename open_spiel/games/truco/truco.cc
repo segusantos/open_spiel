@@ -504,7 +504,14 @@ std::string TrucoState::ToString() const {
     }
     absl::StrAppend(&result, "\n");
   }
-  absl::StrAppend(&result, "|   Truco Level: ", truco_level_);
+  absl::StrAppend(&result, "|   Truco Level: ");
+  if (truco_level_ == 2) {
+    absl::StrAppend(&result, "Truco");
+  } else if (truco_level_ == 3) {
+    absl::StrAppend(&result, "Retruco");
+  } else if (truco_level_ == 4) {
+    absl::StrAppend(&result, "Vale Cuatro");
+  }
   if (pending_response_ == PendingResponse::kTruco) {
     absl::StrAppend(&result, " (Pending Response)");
   }
@@ -658,8 +665,13 @@ std::vector<Action> TrucoState::LegalEnvidoResponseActions() const {
     bool has_real =
         std::find(envido_sequence_.begin(), envido_sequence_.end(),
                   EnvidoCall::kRealEnvido) != envido_sequence_.end();
-    if (last_call == EnvidoCall::kEnvido && !has_real) {
-      actions.push_back(kRealEnvidoAction);
+    if (last_call == EnvidoCall::kEnvido) {
+      if (envido_sequence_.size() == 1) {
+        actions.push_back(kEnvidoAction);
+      }
+      if (!has_real) {
+        actions.push_back(kRealEnvidoAction);
+      }
     }
     if (last_call != EnvidoCall::kFaltaEnvido) {
       actions.push_back(kFaltaEnvidoAction);
@@ -833,17 +845,18 @@ void TrucoState::DoApplyAction(Action move) {
 }
 
 void TrucoState::DealCard(Action card) {
+  SPIEL_CHECK_EQ(cur_player_, kChancePlayerId);
   SPIEL_CHECK_GE(card, 0);
   SPIEL_CHECK_LT(card, kNumCards);
   SPIEL_CHECK_EQ(card_owner_[card], kInvalidPlayer);
 
-  Player recipient = cards_dealt_ % num_players_;
+  Player recipient = (mano_ + cards_dealt_) % num_players_;
   player_hands_[recipient].push_back(card);
   card_owner_[card] = recipient;
   ++cards_dealt_;
   if (cards_dealt_ == num_players_ * kHandSize) {
-    cur_player_ = starting_player_;
-    trick_leader_ = starting_player_;
+    cur_player_ = mano_;
+    trick_leader_ = mano_;
   }
 }
 
@@ -1001,7 +1014,7 @@ void TrucoState::ResolveEnvidoAcceptance() {
 void TrucoState::ResolveEnvidoDecline() {
   SPIEL_CHECK_EQ(pending_response_, PendingResponse::kEnvido);
   int accepted_points = SumEnvidoPoints(/*include_last=*/false);
-  int decline_points = accepted_points + 1;
+  int decline_points = (accepted_points == 0) ? 1 : accepted_points;
   SPIEL_CHECK_NE(envido_last_caller_, kInvalidPlayer);
   Player winner = envido_last_caller_;
   AwardPoints(winner, decline_points);
