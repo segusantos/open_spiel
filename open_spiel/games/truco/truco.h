@@ -55,7 +55,9 @@ inline constexpr int kEnvidoSequenceTensorSize =
     kMaxEnvidoSequenceActions * kNumEnvidoTypes;
 inline constexpr int kTrucoLevelBits = 4;
 inline constexpr int kEnvidoStateBits = 2;
-inline constexpr int kTargetScore = 30;
+// Reduced target score for training feasibility with External Sampling Deep CFR
+// Full game is 30, but that makes the game tree too deep for External Sampling.
+inline constexpr int kTargetScore = 2; 
 inline constexpr int kMalasBuenasThreshold = 15;
 
 inline constexpr int kEnvidoAction = kNumCards;
@@ -255,7 +257,7 @@ class TrucoState : public State {
     Player cur_player;
   };
   std::vector<TrucoResponseState> response_stack_;
-  bool hand_over_ = false;
+  bool preserve_rewards_next_action_ = false;
 
   std::vector<std::pair<Player, EnvidoCall>> envido_log_;
   std::vector<std::pair<Player, int>> truco_log_;

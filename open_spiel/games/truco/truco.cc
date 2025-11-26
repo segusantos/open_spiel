@@ -622,9 +622,6 @@ std::vector<Action> TrucoState::LegalActions() const {
   if (IsTerminal()) {
     return {};
   }
-  if (hand_over_) {
-    return {kNewHandAction};
-  }
   if (IsChanceNode()) {
     return LegalChanceOutcomes();
   }
@@ -818,17 +815,13 @@ std::unique_ptr<State> TrucoState::ResampleFromInfostate(
 }
 
 void TrucoState::DoApplyAction(Action move) {
-  std::fill(rewards_.begin(), rewards_.end(), 0.0);
-
-  if (hand_over_) {
-    SPIEL_CHECK_EQ(move, kNewHandAction);
-    StartNewHand();
-    return;
-  }
-
   if (cur_player_ == kChancePlayerId) {
+    // Dealing cards - don't clear rewards yet
     DealCard(move);
   } else {
+    // Clear rewards at start of regular player actions
+    std::fill(rewards_.begin(), rewards_.end(), 0.0);
+
     if (IsCardAction(move)) {
       SPIEL_CHECK_EQ(pending_response_, PendingResponse::kNone);
       ApplyPlayAction(move);
@@ -1076,8 +1069,9 @@ void TrucoState::ResolveTrucoDecline() {
     terminal_ = true;
     cur_player_ = kTerminalPlayerId;
   } else {
-    hand_over_ = true;
-    cur_player_ = winner_;
+    // Automatically start new hand after truco decline
+    preserve_rewards_next_action_ = true;
+    StartNewHand();
   }
 }
 
@@ -1098,7 +1092,7 @@ void TrucoState::AwardPoints(Player player, int points) {
     cur_player_ = kTerminalPlayerId;
   }
 
-  std::fill(rewards_.begin(), rewards_.end(), 0.0);
+  // Set rewards (don't clear first - they should accumulate from this award)
   rewards_[player] = static_cast<double>(actual_points_gained);
   rewards_[Opponent(player)] = -static_cast<double>(actual_points_gained);
 
@@ -1267,9 +1261,12 @@ void TrucoState::FinishTrick(Player trick_winner) {
     ++trick_wins_[trick_winner];
   }
 
+  int hand_before = num_hands_played_;
   MaybeResolveHand(trick_winner);
-
-  if (!hand_over_ && !terminal_) {
+  int hand_after = num_hands_played_;
+  
+  // Only continue setting up next trick if we're in the same hand
+  if (hand_before == hand_after && !terminal_) {
     std::fill(rewards_.begin(), rewards_.end(), 0.0);
 
     ++current_trick_index_;
@@ -1329,14 +1326,14 @@ void TrucoState::MaybeResolveHand(Player latest_trick_winner) {
       terminal_ = true;
       cur_player_ = kTerminalPlayerId;
     } else {
-      hand_over_ = true;
-      cur_player_ = winner_;
+      // Automatically start new hand instead of requiring kNewHandAction
+      preserve_rewards_next_action_ = true;
+      StartNewHand();
     }
   }
 }
 
 void TrucoState::StartNewHand() {
-  hand_over_ = false;
   winner_ = kInvalidPlayer;
   cards_dealt_ = 0;
   cards_played_in_trick_ = 0;

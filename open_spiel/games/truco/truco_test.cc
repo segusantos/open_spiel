@@ -58,8 +58,8 @@ void FullGameToThirtyTest() {
   while (!state->IsTerminal() && hands < 1000) {
     if (state->IsChanceNode()) {
       state->ApplyAction(state->LegalActions()[0]);
-    } else if (state->LegalActions()[0] == kNewHandAction) {
-      state->ApplyAction(kNewHandAction);
+    } else if (false) {
+      // state->ApplyAction(kNewHandAction);
       hands++;
     } else {
       state->ApplyAction(state->LegalActions()[0]);
@@ -99,7 +99,7 @@ void AbsoluteScoreTest() {
   state->ApplyAction(25);
 
   // P0 wins hand (2 points for Truco)
-  state->ApplyAction(kNewHandAction);
+  // state->ApplyAction(kNewHandAction);
 
   // Check returns (should be +2, -2)
   auto returns = state->Returns();
@@ -144,10 +144,10 @@ void StartingPlayerAndDeterministicPlayTest() {
   state->ApplyAction(1);
 
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  SPIEL_CHECK_FALSE(state->IsChanceNode());
-  SPIEL_CHECK_EQ(state->LegalActions()[0], kNewHandAction);
-  state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
+  // SPIEL_CHECK_EQ(state->LegalActions()[0], kNewHandAction);
+  // // state->ApplyAction(kNewHandAction);
+  // SPIEL_CHECK_TRUE(state->IsChanceNode());
   const std::vector<double> returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], 1.0);
   SPIEL_CHECK_EQ(returns[1], -1.0);
@@ -186,7 +186,7 @@ void EnvidoAcceptTest() {
   state->ApplyAction(1);
   state->ApplyAction(11);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(kNewHandAction);
+  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], 3);
@@ -207,7 +207,7 @@ void EnvidoRaiseDeclineTest() {
   state->ApplyAction(21);
   state->ApplyAction(4);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(kNewHandAction);
+  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], -3);
@@ -220,7 +220,7 @@ void TrucoDeclineTest() {
   state->ApplyAction(kRaiseTrucoAction);
   state->ApplyAction(kRejectBetAction);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(kNewHandAction);
+  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], 1);
@@ -241,7 +241,7 @@ void TrucoValeCuatroTest() {
   state->ApplyAction(21);
   state->ApplyAction(11);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(kNewHandAction);
+  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], 4);
@@ -259,7 +259,7 @@ void TrucoImmediateRetrucoTest() {
   state->ApplyAction(1);
   state->ApplyAction(11);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(kNewHandAction);
+  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], 3);
@@ -332,12 +332,12 @@ void AllTricksTiedManoWinsTest() {
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
   state->ApplyAction(34);
   state->ApplyAction(4);
-  if (!state->IsChanceNode() && state->LegalActions()[0] != kNewHandAction) {
+  if (!state->IsChanceNode() && true) {
     state->ApplyAction(35);
     state->ApplyAction(5);
   }
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(kNewHandAction);
+  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], 1);
@@ -373,7 +373,7 @@ void TieFirstTrickWinnerSecondTakesHandTest() {
   state->ApplyAction(13);
 
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(kNewHandAction);
+  // state->ApplyAction(kNewHandAction);
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], 1);
   SPIEL_CHECK_EQ(returns[1], -1);
@@ -390,7 +390,7 @@ void FirstWonSecondTiedWinnerFirstTakesHandTest() {
   state->ApplyAction(3);
 
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(kNewHandAction);
+  // state->ApplyAction(kNewHandAction);
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], 1);
   SPIEL_CHECK_EQ(returns[1], -1);
@@ -405,7 +405,7 @@ void RetrucoDeclinePointsTest() {
   state->ApplyAction(kRejectBetAction);
 
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  state->ApplyAction(kNewHandAction);
+  // state->ApplyAction(kNewHandAction);
   const auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0], -2);
   SPIEL_CHECK_EQ(returns[1], 2);
@@ -492,7 +492,7 @@ void TieFirstTieSecondThirdDecidesTest() {
   state->ApplyAction(34);
   state->ApplyAction(4);
 
-  if (state->IsChanceNode() || state->LegalActions()[0] == kNewHandAction) {
+  if (state->IsChanceNode() || false) {
     const auto returns = state->Returns();
     if (returns[0] > 0) {
       SPIEL_CHECK_TRUE(
@@ -503,7 +503,7 @@ void TieFirstTieSecondThirdDecidesTest() {
     state->ApplyAction(13);
     state->ApplyAction(20);
 
-    state->ApplyAction(kNewHandAction);
+    // state->ApplyAction(kNewHandAction);
     const auto returns = state->Returns();
     SPIEL_CHECK_EQ(returns[0], -1);
     SPIEL_CHECK_EQ(returns[1], 1);
