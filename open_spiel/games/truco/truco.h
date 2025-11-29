@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Truco Argentino is a popular trick-taking card game from South America.
-// https://en.wikipedia.org/wiki/Truco_argentino
+// https://es.wikipedia.org/wiki/Truco_argentino
 //
 // This implementation follows the 2-player Argentine rules without Flor.
 //
@@ -26,8 +26,8 @@
 
 #include <array>
 #include <functional>
+#include <iosfwd>
 #include <memory>
-#include <ostream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -55,10 +55,7 @@ inline constexpr int kEnvidoSequenceTensorSize =
     kMaxEnvidoSequenceActions * kNumEnvidoTypes;
 inline constexpr int kTrucoLevelBits = 4;
 inline constexpr int kEnvidoStateBits = 2;
-// Reduced target score for training feasibility with External Sampling Deep CFR
-// Full game is 30, but that makes the game tree too deep for External Sampling.
 inline constexpr int kTargetScore = 30;
-inline constexpr int kMalasBuenasThreshold = 15;
 
 inline constexpr int kEnvidoAction = kNumCards;
 inline constexpr int kRealEnvidoAction = kNumCards + 1;
@@ -66,8 +63,7 @@ inline constexpr int kFaltaEnvidoAction = kNumCards + 2;
 inline constexpr int kRaiseTrucoAction = kNumCards + 3;
 inline constexpr int kAcceptBetAction = kNumCards + 4;
 inline constexpr int kRejectBetAction = kNumCards + 5;
-inline constexpr int kNewHandAction = kNumCards + 6;
-inline constexpr int kNumSpecialActions = 7;
+inline constexpr int kNumSpecialActions = 6;
 inline constexpr int kNumDistinctTrucoActions = kNumCards + kNumSpecialActions;
 inline constexpr int kMaxBettingActions = 10;
 
@@ -198,8 +194,7 @@ class TrucoState : public State {
   void StartNewHand();
   int SumEnvidoPoints(bool include_last) const;
   int EnvidoCallValue(EnvidoCall call) const;
-  int FaltaEnvidoValue() const;
-  int FaltaEnvidoValue(Player loser) const;
+  int FaltaEnvidoValue(Player winner) const;
   int ComputeEnvidoScore(const std::vector<int>& cards) const;
   std::vector<std::vector<int>> FindCardCombinationsWithEnvidoScore(
       const std::vector<int>& available_cards, int num_cards,
@@ -210,6 +205,10 @@ class TrucoState : public State {
   int PlayerEnvidoScore(Player player) const;
   Player DetermineEnvidoWinner() const;
   Player Opponent(Player player) const { return 1 - player; }
+
+  // Potential function for reward shaping: Φ(s) = (my_score - opp_score) / kTargetScore
+  // Returns a value in [-1, 1] representing the relative advantage.
+  double Potential(Player player) const;
 
   Player cur_player_;
   Player starting_player_;
@@ -257,7 +256,6 @@ class TrucoState : public State {
     Player cur_player;
   };
   std::vector<TrucoResponseState> response_stack_;
-  bool preserve_rewards_next_action_ = false;
 
   std::vector<std::pair<Player, EnvidoCall>> envido_log_;
   std::vector<std::pair<Player, int>> truco_log_;

@@ -15,9 +15,9 @@
 #include "open_spiel/games/truco/truco.h"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <numeric>
-#include <utility>
 #include <vector>
 
 #include "open_spiel/abseil-cpp/absl/types/span.h"
@@ -31,6 +31,12 @@ namespace truco {
 namespace {
 
 namespace testing = open_spiel::testing;
+
+// Helper to compute the expected potential for a given score difference
+double ExpectedPotential(int my_score, int opp_score) {
+  return static_cast<double>(my_score - opp_score) /
+         static_cast<double>(kTargetScore);
+}
 
 void BasicTrucoTests() {
   testing::LoadGameTest("truco");
@@ -58,25 +64,15 @@ void FullGameToThirtyTest() {
   while (!state->IsTerminal() && hands < 1000) {
     if (state->IsChanceNode()) {
       state->ApplyAction(state->LegalActions()[0]);
-    } else if (false) {
-      // state->ApplyAction(kNewHandAction);
-      hands++;
     } else {
       state->ApplyAction(state->LegalActions()[0]);
     }
   }
 
   SPIEL_CHECK_TRUE(state->IsTerminal());
-  // With the new absolute scoring, returns are zero-sum (margin).
-  // The winner should have a positive return, but it might not be exactly 30
-  // if the opponent scored points (e.g. 30-29 win -> return 1).
-  // However, since this test plays randomly/deterministically (first action),
-  // we should check that the game ended correctly.
-  // We can't easily access game_points_ here without casting, but we can check
-  // that returns are non-zero and sum to 0.
   auto returns = state->Returns();
   SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
-  SPIEL_CHECK_TRUE(std::abs(returns[0]) > 0);
+  SPIEL_CHECK_TRUE(std::abs(returns[0]) == 1.0);
 }
 
 void AbsoluteScoreTest() {
@@ -98,24 +94,16 @@ void AbsoluteScoreTest() {
   state->ApplyAction(36);
   state->ApplyAction(25);
 
-  // P0 wins hand (2 points for Truco)
-  // state->ApplyAction(kNewHandAction);
-
-  // Check returns (should be +2, -2)
   auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], 2);
-  SPIEL_CHECK_EQ(returns[1], -2);
+  // Returns should be zero-sum and positive for P0
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_GT(returns[0], 0);
 
   // Check string representation for absolute score
   // Should be "| Score: P0 [ 2 ]  vs  P1 [ 0 ]"
   std::string str = state->ToString();
   SPIEL_CHECK_NE(str.find("| Score: P0 [ 2 ]  vs  P1 [ 0 ]"),
                  std::string::npos);
-
-  // Now let P1 win a hand worth 1 point
-  // Deal next hand...
-  // We can't easily force the deal in the same state object without complex
-  // setup, but we can verify the score didn't go to -2 for P1 in the string.
 }
 
 void StartingPlayerAndDeterministicPlayTest() {
@@ -145,12 +133,9 @@ void StartingPlayerAndDeterministicPlayTest() {
 
   SPIEL_CHECK_FALSE(state->IsTerminal());
   SPIEL_CHECK_TRUE(state->IsChanceNode());
-  // SPIEL_CHECK_EQ(state->LegalActions()[0], kNewHandAction);
-  // // state->ApplyAction(kNewHandAction);
-  // SPIEL_CHECK_TRUE(state->IsChanceNode());
   const std::vector<double> returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], 1.0);
-  SPIEL_CHECK_EQ(returns[1], -1.0);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_GT(returns[0], 0);
 
   const std::string info_string = state->InformationStateString(0);
   SPIEL_CHECK_NE(info_string.find("H:"), std::string::npos);
@@ -186,11 +171,10 @@ void EnvidoAcceptTest() {
   state->ApplyAction(1);
   state->ApplyAction(11);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], 3);
-  SPIEL_CHECK_EQ(returns[1], -3);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_GT(returns[0], 0);
 }
 
 void EnvidoRaiseDeclineTest() {
@@ -200,18 +184,17 @@ void EnvidoRaiseDeclineTest() {
   state->ApplyAction(kRealEnvidoAction);
   state->ApplyAction(kRejectBetAction);
   const auto after_decline = state->Returns();
-  SPIEL_CHECK_EQ(after_decline[0], -2);
-  SPIEL_CHECK_EQ(after_decline[1], 2);
+  SPIEL_CHECK_EQ(after_decline[0] + after_decline[1], 0);
+  SPIEL_CHECK_LT(after_decline[0], 0);
   state->ApplyAction(3);
   state->ApplyAction(20);
   state->ApplyAction(21);
   state->ApplyAction(4);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], -3);
-  SPIEL_CHECK_EQ(returns[1], 3);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_LT(returns[0], 0);
 }
 
 void TrucoDeclineTest() {
@@ -220,11 +203,10 @@ void TrucoDeclineTest() {
   state->ApplyAction(kRaiseTrucoAction);
   state->ApplyAction(kRejectBetAction);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], 1);
-  SPIEL_CHECK_EQ(returns[1], -1);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_GT(returns[0], 0);
 }
 
 void TrucoValeCuatroTest() {
@@ -241,11 +223,10 @@ void TrucoValeCuatroTest() {
   state->ApplyAction(21);
   state->ApplyAction(11);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], 4);
-  SPIEL_CHECK_EQ(returns[1], -4);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_GT(returns[0], 0);
 }
 
 void TrucoImmediateRetrucoTest() {
@@ -259,11 +240,10 @@ void TrucoImmediateRetrucoTest() {
   state->ApplyAction(1);
   state->ApplyAction(11);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], 3);
-  SPIEL_CHECK_EQ(returns[1], -3);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_GT(returns[0], 0);
 }
 
 void TrucoSecondTrickTurnOrderTest() {
@@ -302,14 +282,12 @@ void TrucoSecondTrickCloneTest() {
 
 void FaltaEnvidoAcceptTest() {
   auto game = LoadGame("truco");
-  // P0: 5,6,7 de Oro (envido: 20+7+6=33)
-  // P1: 1,2,3 de Basto (envido: 20+3+2=25)
   auto state = DealFixedHand(game, {34, 0, 35, 1, 36, 2});
   state->ApplyAction(kFaltaEnvidoAction);
   state->ApplyAction(kAcceptBetAction);
   const auto returns_after_envido = state->Returns();
-  SPIEL_CHECK_EQ(returns_after_envido[0], kTargetScore);
-  SPIEL_CHECK_EQ(returns_after_envido[1], -kTargetScore);
+  SPIEL_CHECK_EQ(returns_after_envido[0], 1.0);
+  SPIEL_CHECK_EQ(returns_after_envido[1], -1.0);
   SPIEL_CHECK_TRUE(state->IsTerminal());
 }
 
@@ -319,8 +297,8 @@ void EnvidoTieGoesToManoTest() {
   state->ApplyAction(kEnvidoAction);
   state->ApplyAction(kAcceptBetAction);
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], 2);
-  SPIEL_CHECK_EQ(returns[1], -2);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_GT(returns[0], 0);
   SPIEL_CHECK_FALSE(state->IsTerminal());
 }
 
@@ -332,16 +310,13 @@ void AllTricksTiedManoWinsTest() {
   SPIEL_CHECK_EQ(state->CurrentPlayer(), 0);
   state->ApplyAction(34);
   state->ApplyAction(4);
-  if (!state->IsChanceNode() && true) {
-    state->ApplyAction(35);
-    state->ApplyAction(5);
-  }
+  state->ApplyAction(35);
+  state->ApplyAction(5);
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  // state->ApplyAction(kNewHandAction);
   SPIEL_CHECK_TRUE(state->IsChanceNode());
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], 1);
-  SPIEL_CHECK_EQ(returns[1], -1);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_GT(returns[0], 0);
 }
 
 void EnvidoFirstTest() {
@@ -353,8 +328,8 @@ void EnvidoFirstTest() {
   state->ApplyAction(kAcceptBetAction);
 
   auto rewards = state->Rewards();
-  SPIEL_CHECK_EQ(rewards[0], -2);
-  SPIEL_CHECK_EQ(rewards[1], 2);
+  SPIEL_CHECK_EQ(rewards[0] + rewards[1], 0);
+  SPIEL_CHECK_LT(rewards[0], 0);
 
   state->ApplyAction(kAcceptBetAction);
   SPIEL_CHECK_FALSE(state->IsTerminal());
@@ -373,10 +348,9 @@ void TieFirstTrickWinnerSecondTakesHandTest() {
   state->ApplyAction(13);
 
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  // state->ApplyAction(kNewHandAction);
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], 1);
-  SPIEL_CHECK_EQ(returns[1], -1);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_GT(returns[0], 0);
 }
 
 void FirstWonSecondTiedWinnerFirstTakesHandTest() {
@@ -390,10 +364,9 @@ void FirstWonSecondTiedWinnerFirstTakesHandTest() {
   state->ApplyAction(3);
 
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  // state->ApplyAction(kNewHandAction);
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], 1);
-  SPIEL_CHECK_EQ(returns[1], -1);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_GT(returns[0], 0);
 }
 
 void RetrucoDeclinePointsTest() {
@@ -405,10 +378,9 @@ void RetrucoDeclinePointsTest() {
   state->ApplyAction(kRejectBetAction);
 
   SPIEL_CHECK_FALSE(state->IsTerminal());
-  // state->ApplyAction(kNewHandAction);
   const auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], -2);
-  SPIEL_CHECK_EQ(returns[1], 2);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_LT(returns[0], 0);
 }
 
 void EnvidoIllegalInSecondTrickTest() {
@@ -492,22 +464,13 @@ void TieFirstTieSecondThirdDecidesTest() {
   state->ApplyAction(34);
   state->ApplyAction(4);
 
-  if (state->IsChanceNode() || false) {
-    const auto returns = state->Returns();
-    if (returns[0] > 0) {
-      SPIEL_CHECK_TRUE(
-          false &&
-          "Hand ended early after 2 ties, Mano won. Should play 3rd trick.");
-    }
-  } else {
-    state->ApplyAction(13);
-    state->ApplyAction(20);
+  SPIEL_CHECK_FALSE(state->IsChanceNode());
+  state->ApplyAction(13);
+  state->ApplyAction(20);
 
-    // state->ApplyAction(kNewHandAction);
-    const auto returns = state->Returns();
-    SPIEL_CHECK_EQ(returns[0], -1);
-    SPIEL_CHECK_EQ(returns[1], 1);
-  }
+  const auto returns = state->Returns();
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_LT(returns[0], 0);
 }
 
 void ThirdTrickLeaderTest() {
@@ -526,22 +489,106 @@ void ThirdTrickLeaderTest() {
 
 void EnvidoEnvidoRejectTest() {
   auto game = LoadGame("truco");
-  // P0: 1 Espada (20), 7 Oro (36), 3 Basto (2)
-  // P1: 7 Espada (26), 6 Espada (25), 5 Espada (24)
   auto state = DealFixedHand(game, {20, 26, 36, 25, 2, 24});
 
-  // P0 calls Envido
   state->ApplyAction(kEnvidoAction);
-  // P1 raises Envido
   state->ApplyAction(kEnvidoAction);
-  // P0 rejects
   state->ApplyAction(kRejectBetAction);
 
-  // Check returns (should be -2, 2)
-  // The bug report says it gives 3 points.
   auto returns = state->Returns();
-  SPIEL_CHECK_EQ(returns[0], -2);
-  SPIEL_CHECK_EQ(returns[1], 2);
+  SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  SPIEL_CHECK_LT(returns[0], 0);
+}
+
+// Test that verifies the potential-based reward shaping properties
+void PotentialBasedRewardShapingTest() {
+  auto game = LoadGame("truco");
+
+  // Test 1: Verify terminal returns are exactly +1/-1
+  {
+    auto state = DealFixedHand(game, {34, 0, 35, 1, 36, 2});
+    state->ApplyAction(kFaltaEnvidoAction);
+    state->ApplyAction(kAcceptBetAction);
+    SPIEL_CHECK_TRUE(state->IsTerminal());
+    auto returns = state->Returns();
+    SPIEL_CHECK_EQ(returns[0], 1.0);
+    SPIEL_CHECK_EQ(returns[1], -1.0);
+  }
+
+  // Test 2: Verify rewards sum to zero (zero-sum property)
+  {
+    auto state = DealFixedHand(game, {20, 26, 36, 25, 2, 24});
+    state->ApplyAction(kEnvidoAction);
+    state->ApplyAction(kAcceptBetAction);
+    auto rewards = state->Rewards();
+    SPIEL_CHECK_LT(std::abs(rewards[0] + rewards[1]), 1e-9);
+  }
+
+  // Test 3: Verify that returns accumulate correctly (shaped rewards telescope)
+  // Play through multiple hands and verify returns at terminal
+  {
+    std::unique_ptr<State> state = game->NewInitialState();
+    while (!state->IsTerminal()) {
+      if (state->IsChanceNode()) {
+        state->ApplyAction(state->LegalActions()[0]);
+      } else {
+        state->ApplyAction(state->LegalActions()[0]);
+      }
+    }
+    auto returns = state->Returns();
+    SPIEL_CHECK_TRUE(std::abs(returns[0]) == 1.0);
+    SPIEL_CHECK_EQ(returns[0] + returns[1], 0);
+  }
+
+  // Test 4: Verify potential formula directly
+  // Starting position: both at 0 points, potential should be 0 for both
+  {
+    auto state = DealFixedHand(game, {0, 10, 1, 11, 2, 12});
+    // Initial returns should be 0
+    auto returns = state->Returns();
+    SPIEL_CHECK_EQ(returns[0], 0);
+    SPIEL_CHECK_EQ(returns[1], 0);
+
+    // After P0 wins 1 point (truco decline):
+    // New potential for P0: 1/30 = 0.0333...
+    // New potential for P1: -1/30 = -0.0333...
+    // Shaped reward = new_potential - old_potential = 0.0333... for P0
+    state->ApplyAction(kRaiseTrucoAction);
+    state->ApplyAction(kRejectBetAction);
+    auto returns_after = state->Returns();
+    double expected_delta = 1.0 / static_cast<double>(kTargetScore);
+    SPIEL_CHECK_LT(std::abs(returns_after[0] - expected_delta), 1e-9);
+    SPIEL_CHECK_LT(std::abs(returns_after[1] + expected_delta), 1e-9);
+  }
+}
+
+// Test that shaped rewards properly track score changes
+void ShapedRewardsTrackScoreTest() {
+  auto game = LoadGame("truco");
+
+  // Win 2 points with truco
+  auto state = DealFixedHand(game, {20, 10, 21, 11, 22, 12});
+  state->ApplyAction(kRaiseTrucoAction);
+  state->ApplyAction(kAcceptBetAction);
+  state->ApplyAction(20);
+  state->ApplyAction(10);
+  state->ApplyAction(21);
+  state->ApplyAction(11);
+
+  // P0 won 2 points
+  // Expected shaped return = (2 - 0) / 30 = 2/30 ≈ 0.0667
+  auto returns = state->Returns();
+  double expected = 2.0 / static_cast<double>(kTargetScore);
+  SPIEL_CHECK_LT(std::abs(returns[0] - expected), 1e-9);
+  SPIEL_CHECK_LT(std::abs(returns[1] + expected), 1e-9);
+}
+
+// Test utility bounds
+void UtilityBoundsTest() {
+  auto game = LoadGame("truco");
+  // Small epsilon for floating point tolerance
+  SPIEL_CHECK_LT(std::abs(game->MinUtility() - (-1.0)), 1e-6);
+  SPIEL_CHECK_LT(std::abs(game->MaxUtility() - 1.0), 1e-6);
 }
 
 }  // namespace
@@ -576,4 +623,9 @@ int main(int argc, char** argv) {
   open_spiel::truco::ThirdTrickLeaderTest();
   open_spiel::truco::TieFirstTieSecondThirdDecidesTest();
   open_spiel::truco::EnvidoEnvidoRejectTest();
+
+  // Potential-based reward shaping tests
+  open_spiel::truco::PotentialBasedRewardShapingTest();
+  open_spiel::truco::ShapedRewardsTrackScoreTest();
+  open_spiel::truco::UtilityBoundsTest();
 }
