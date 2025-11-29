@@ -191,6 +191,7 @@ class TrucoState : public State {
   void ResolveTrucoAcceptance();
   void ResolveTrucoDecline();
   void AwardPoints(Player player, int points);
+  double Potential(Player player) const;
   void StartNewHand();
   int SumEnvidoPoints(bool include_last) const;
   int EnvidoCallValue(EnvidoCall call) const;
@@ -205,10 +206,6 @@ class TrucoState : public State {
   int PlayerEnvidoScore(Player player) const;
   Player DetermineEnvidoWinner() const;
   Player Opponent(Player player) const { return 1 - player; }
-
-  // Potential function for reward shaping: Φ(s) = (my_score - opp_score) / kTargetScore
-  // Returns a value in [-1, 1] representing the relative advantage.
-  double Potential(Player player) const;
 
   Player cur_player_;
   Player starting_player_;
@@ -227,7 +224,7 @@ class TrucoState : public State {
   std::vector<Trick> tricks_;
   std::vector<double> returns_;
   std::vector<double> rewards_;
-  std::vector<int> game_points_;  // Total game score (to 30)
+  std::vector<int> game_points_;
   int num_hands_played_ = 0;
   bool terminal_ = false;
 
@@ -240,8 +237,7 @@ class TrucoState : public State {
   Player envido_last_caller_ = kInvalidPlayer;
   bool envido_resolved_ = false;
   bool envido_locked_ = false;
-  std::array<int, 2> revealed_envido_scores_ = {
-      -1, -1};  // Public info after resolution
+  std::array<int, 2> revealed_envido_scores_ = {-1, -1};
 
   // Truco betting data.
   int truco_level_ = 1;
@@ -256,9 +252,6 @@ class TrucoState : public State {
     Player cur_player;
   };
   std::vector<TrucoResponseState> response_stack_;
-
-  std::vector<std::pair<Player, EnvidoCall>> envido_log_;
-  std::vector<std::pair<Player, int>> truco_log_;
 };
 
 class TrucoGame : public Game {
