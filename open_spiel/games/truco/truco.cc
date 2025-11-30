@@ -781,9 +781,15 @@ for (size_t i = 0; i < opponent_slots.size(); ++i) {
 std::set<int> assigned(chosen_combination.begin(),
                            chosen_combination.end());
     for (int card : available_cards) {
-      if (assigned.find(card) == assigned.end()) {
+      if (assigned.find(card) == assigned.end() &&
+          truco_clone->card_owner_[card] != player_id) {
         truco_clone->card_owner_[card] = kInvalidPlayer;
       }
+    }
+
+    // Re-validate player_id's hand cards have correct ownership
+    for (int card : truco_clone->player_hands_[player_id]) {
+      truco_clone->card_owner_[card] = player_id;
     }
 
     return clone;
@@ -799,7 +805,15 @@ std::shuffle(available_cards.begin(), available_cards.end(), gen);
   }
 
   for (size_t i = opponent_slots.size(); i < available_cards.size(); ++i) {
-    truco_clone->card_owner_[available_cards[i]] = kInvalidPlayer;
+    int card = available_cards[i];
+    if (truco_clone->card_owner_[card] != player_id) {
+      truco_clone->card_owner_[card] = kInvalidPlayer;
+    }
+  }
+
+  // Re-validate player_id's hand cards have correct ownership
+  for (int card : truco_clone->player_hands_[player_id]) {
+    truco_clone->card_owner_[card] = player_id;
   }
 
   return clone;
