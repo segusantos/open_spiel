@@ -787,7 +787,6 @@ std::set<int> assigned(chosen_combination.begin(),
       }
     }
 
-    // Re-validate player_id's hand cards have correct ownership
     for (int card : truco_clone->player_hands_[player_id]) {
       truco_clone->card_owner_[card] = player_id;
     }
@@ -811,7 +810,6 @@ std::shuffle(available_cards.begin(), available_cards.end(), gen);
     }
   }
 
-  // Re-validate player_id's hand cards have correct ownership
   for (int card : truco_clone->player_hands_[player_id]) {
     truco_clone->card_owner_[card] = player_id;
   }
