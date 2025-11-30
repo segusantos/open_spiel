@@ -788,7 +788,9 @@ std::set<int> assigned(chosen_combination.begin(),
     }
 
     for (int card : truco_clone->player_hands_[player_id]) {
-      truco_clone->card_owner_[card] = player_id;
+      if (!truco_clone->card_played_[card]) {
+        truco_clone->card_owner_[card] = player_id;
+      }
     }
 
     return clone;
@@ -811,7 +813,9 @@ std::shuffle(available_cards.begin(), available_cards.end(), gen);
   }
 
   for (int card : truco_clone->player_hands_[player_id]) {
-    truco_clone->card_owner_[card] = player_id;
+    if (!truco_clone->card_played_[card]) {
+      truco_clone->card_owner_[card] = player_id;
+    }
   }
 
   return clone;
